@@ -1,3 +1,4 @@
+SET NAMES utf8mb4;
 CREATE DATABASE IF NOT EXISTS gdi_db;
 USE gdi_db;
 
@@ -87,10 +88,24 @@ CREATE TABLE inventario (
     fecha_ultima_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-INSERT INTO usuarios (nombre_completo, rol, email, password) VALUES 
+-- Contraseñas iniciales de demostración: el backend las cifra con BCrypt en el primer inicio de sesión.
+INSERT INTO usuarios (nombre_completo, rol, email, password) VALUES
 ('Dra. Ana López', 'Odontologo', 'ana@clinica.com', '12345'),
-('Recepción', 'Recepcionista', 'recepcion@clinica.com', '12345');
+('Recepción', 'Recepcionista', 'recepcion@clinica.com', '12345'),
+('Administrador', 'Administrador', 'admin@clinica.com', '12345');
 
-INSERT INTO pacientes (nombre_completo, telefono) VALUES 
-('Juan Pérez', '555-1234'),
-('María García', '555-5678');
+INSERT INTO pacientes (nombre_completo, telefono) VALUES
+('Juan Pérez', '5551234567'),
+('María García', '5556781234'),
+('Luis Hernández', '5552223344'),
+('Sofía Ramírez', '5559876543');
+
+-- Citas de ejemplo en los próximos días hábiles (se omite el domingo).
+SET @d1 = DATE_ADD(CURDATE(), INTERVAL IF(DAYOFWEEK(DATE_ADD(CURDATE(), INTERVAL 1 DAY)) = 1, 2, 1) DAY);
+SET @d2 = DATE_ADD(@d1, INTERVAL IF(DAYOFWEEK(DATE_ADD(@d1, INTERVAL 1 DAY)) = 1, 2, 1) DAY);
+
+INSERT INTO citas (paciente_id, odontologo_id, fecha, hora, motivo, estado) VALUES
+(1, 1, @d1, '09:00:00', 'Limpieza dental', 'Confirmada'),
+(2, 1, @d1, '10:30:00', 'Revisión de ortodoncia', 'Programada'),
+(3, 1, @d1, '12:00:00', 'Dolor en muela', 'Programada'),
+(4, 1, @d2, '11:00:00', 'Valoración inicial', 'Programada');

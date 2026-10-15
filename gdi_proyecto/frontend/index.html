@@ -2,76 +2,181 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>GDI - Módulo de Citas</title>
-    <style>
-        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f9; }
-        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        input, button { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button { background-color: #0056b3; color: white; border: none; cursor: pointer; font-weight: bold; }
-        button:hover { background-color: #004494; }
-        .cita { border-left: 4px solid #0056b3; background: #f9f9f9; margin-bottom: 10px; padding: 10px; border-radius: 4px; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>GDI · Clínica Imagen</title>
+    <link rel="icon" href="img/logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap">
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-    <div class="container">
-        <h2>Clínica Imagen - Agendar Cita</h2>
-        <form id="citaForm">
-            <input type="date" id="fecha" required>
-            <input type="time" id="hora" required>
-            <input type="text" id="motivo" placeholder="Motivo de la consulta" required>
-            <button type="submit">Guardar Cita</button>
+
+<!-- ============ Inicio de sesión ============ -->
+<section id="vista-login" class="login" hidden>
+    <div class="login__card">
+        <img src="img/logo.png" alt="Clínica Imagen" class="login__logo">
+        <h1 class="login__titulo">GDI · Gestión Dental Integral</h1>
+        <p class="login__sub">Inicia sesión para administrar la agenda de la clínica</p>
+        <form id="form-login" novalidate>
+            <label class="campo">
+                <span class="campo__etiqueta">Correo electrónico <b class="req">*</b></span>
+                <input type="email" name="email" autocomplete="username" required placeholder="recepcion@clinica.com">
+            </label>
+            <label class="campo">
+                <span class="campo__etiqueta">Contraseña <b class="req">*</b></span>
+                <input type="password" name="password" autocomplete="current-password" required placeholder="••••••">
+            </label>
+            <p class="error-form" id="login-error" hidden></p>
+            <button type="submit" class="btn btn--primario btn--bloque">Entrar</button>
         </form>
-
-        <h2>Citas Programadas</h2>
-        <div id="listaCitas"></div>
+        <div class="login__demo">
+            <span>Acceso rápido de demostración</span>
+            <div class="login__chips">
+                <button type="button" class="chip" data-demo="recepcion@clinica.com">Recepción</button>
+                <button type="button" class="chip" data-demo="ana@clinica.com">Odontóloga</button>
+                <button type="button" class="chip" data-demo="admin@clinica.com">Administrador</button>
+            </div>
+        </div>
     </div>
+</section>
 
-    <script>
-        document.getElementById('citaForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const cita = {
-                fecha: document.getElementById('fecha').value,
-                hora: document.getElementById('hora').value,
-                motivo: document.getElementById('motivo').value
-            };
-            
-            try {
-                const response = await fetch('http://localhost:8080/api/citas', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(cita)
-                });
+<!-- ============ Aplicación ============ -->
+<div id="vista-app" hidden>
+    <header class="topbar">
+        <div class="topbar__marca">
+            <span class="topbar__emblema"><img src="img/logo.png" alt="Clínica Imagen"></span>
+            <div>
+                <strong>Clínica Imagen</strong>
+                <small>GDI · Módulo de Citas</small>
+            </div>
+        </div>
+        <nav class="tabs" id="tabs">
+            <button class="tab activo" data-vista="agenda" data-icon="calendario">Agenda</button>
+            <button class="tab" data-vista="citas" data-icon="lista">Citas</button>
+            <button class="tab" data-vista="pacientes" data-icon="usuarios">Pacientes</button>
+        </nav>
+        <div class="topbar__derecha">
+            <div class="reloj" id="reloj" title="Hora de la clínica"></div>
+            <div class="usuario">
+                <span class="usuario__avatar" id="usuario-avatar"></span>
+                <span class="usuario__info"><strong id="usuario-nombre"></strong><small id="usuario-rol"></small></span>
+                <button class="btn-icono" id="btn-salir" title="Cerrar sesión" data-icon="salir"></button>
+            </div>
+        </div>
+    </header>
 
-                if (response.ok) {
-                    alert("¡Cita guardada correctamente!");
-                    document.getElementById('citaForm').reset();
-                    cargarCitas();
-                } else {
-                    alert("El servidor de Java respondió, pero hubo un error al guardar en la Base de Datos.");
-                }
-            } catch (error) {
-                alert("Error grave: El frontend no puede comunicarse con Java en el puerto 8080.");
-                console.error(error);
-            }
-        });
+    <main class="contenido">
+        <section class="kpis" id="kpis"></section>
 
-        async function cargarCitas() {
-            try {
-                const res = await fetch('http://localhost:8080/api/citas');
-                const citas = await res.json();
-                document.getElementById('listaCitas').innerHTML = citas.map(c => 
-                    `<div class="cita">
-                        <strong>Fecha:</strong> ${c.fecha} a las ${c.hora} <br> 
-                        <strong>Motivo:</strong> ${c.motivo} <br>
-                        <small>Estado: ${c.estado}</small>
-                    </div>`
-                ).reverse().join('');
-            } catch (error) {
-                document.getElementById('listaCitas').innerHTML = "<p style='color:red;'>No se pudieron cargar las citas. Verifica que el backend esté encendido.</p>";
-            }
-        }
-        
-        cargarCitas();
-    </script>
+        <!-- Agenda -->
+        <section id="vista-agenda" class="vista">
+            <div class="agenda">
+                <div class="panel calendario">
+                    <div class="calendario__cabecera">
+                        <button class="btn-icono" id="mes-anterior" title="Mes anterior" data-icon="izq"></button>
+                        <h2 id="mes-titulo"></h2>
+                        <button class="btn-icono" id="mes-siguiente" title="Mes siguiente" data-icon="der"></button>
+                    </div>
+                    <div class="calendario__herramientas">
+                        <button class="btn btn--suave btn--chico" id="btn-hoy">Hoy</button>
+                        <label class="select-compacto">
+                            <span data-icon="diente"></span>
+                            <select id="filtro-odontologo" aria-label="Odontólogo"></select>
+                        </label>
+                    </div>
+                    <div class="calendario__semana">
+                        <span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span>
+                    </div>
+                    <div class="calendario__dias" id="calendario-dias"></div>
+                    <ul class="leyenda">
+                        <li><i class="punto punto--libre"></i>Con espacios</li>
+                        <li><i class="punto punto--lleno"></i>Lleno</li>
+                        <li><i class="punto punto--pasado"></i>Pasado</li>
+                        <li><i class="punto punto--cerrado"></i>Cerrado</li>
+                    </ul>
+                </div>
+
+                <div class="panel dia">
+                    <div class="dia__cabecera">
+                        <div>
+                            <h2 id="dia-titulo"></h2>
+                            <p id="dia-mensaje" class="texto-suave"></p>
+                        </div>
+                        <button class="btn btn--primario" id="btn-nueva-cita" data-icon="mas" data-rol="gestion">Nueva cita</button>
+                    </div>
+                    <ul class="leyenda leyenda--horas">
+                        <li><i class="punto punto--libre"></i>Disponible</li>
+                        <li><i class="punto punto--lleno"></i>Ocupado</li>
+                        <li><i class="punto punto--pasado"></i>Hora pasada</li>
+                    </ul>
+                    <div id="horarios" class="horarios"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Listado de citas -->
+        <section id="vista-citas" class="vista" hidden>
+            <div class="panel">
+                <div class="barra-filtros">
+                    <label class="buscador">
+                        <span data-icon="buscar"></span>
+                        <input type="search" id="citas-buscar" placeholder="Buscar paciente, teléfono o motivo…">
+                    </label>
+                    <div class="segmentos" id="citas-rango">
+                        <button data-rango="hoy">Hoy</button>
+                        <button data-rango="proximas" class="activo">Próximas</button>
+                        <button data-rango="pasadas">Anteriores</button>
+                        <button data-rango="todas">Todas</button>
+                    </div>
+                    <select id="citas-estado" aria-label="Estado">
+                        <option value="">Todos los estados</option>
+                        <option>Programada</option>
+                        <option>Confirmada</option>
+                        <option>Completada</option>
+                        <option>Inasistencia</option>
+                        <option>Cancelada</option>
+                    </select>
+                    <button class="btn btn--primario" id="btn-nueva-cita-2" data-icon="mas" data-rol="gestion">Nueva cita</button>
+                </div>
+                <div id="tabla-citas"></div>
+            </div>
+        </section>
+
+        <!-- Pacientes -->
+        <section id="vista-pacientes" class="vista" hidden>
+            <div class="panel">
+                <div class="barra-filtros">
+                    <label class="buscador">
+                        <span data-icon="buscar"></span>
+                        <input type="search" id="pacientes-buscar" placeholder="Buscar por nombre o teléfono…">
+                    </label>
+                    <button class="btn btn--primario" id="btn-nuevo-paciente" data-icon="mas" data-rol="gestion">Nuevo paciente</button>
+                </div>
+                <div id="tabla-pacientes"></div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<!-- ============ Modal genérico ============ -->
+<div class="modal" id="modal" hidden>
+    <div class="modal__fondo" data-cerrar></div>
+    <div class="modal__caja" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+        <header class="modal__cabecera">
+            <h3 id="modal-titulo"></h3>
+            <button class="btn-icono" data-cerrar title="Cerrar" data-icon="cerrar"></button>
+        </header>
+        <div class="modal__cuerpo" id="modal-cuerpo"></div>
+    </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="js/ui.js"></script>
+<script src="js/api.js"></script>
+<script src="js/agenda.js"></script>
+<script src="js/citas.js"></script>
+<script src="js/pacientes.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
