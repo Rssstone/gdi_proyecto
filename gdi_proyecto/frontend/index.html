@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>GDI - Módulo de Citas</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f9; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        input, button { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { background-color: #0056b3; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #004494; }
+        .cita { border-left: 4px solid #0056b3; background: #f9f9f9; margin-bottom: 10px; padding: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Clínica Imagen - Agendar Cita</h2>
+        <form id="citaForm">
+            <input type="date" id="fecha" required>
+            <input type="time" id="hora" required>
+            <input type="text" id="motivo" placeholder="Motivo de la consulta" required>
+            <button type="submit">Guardar Cita</button>
+        </form>
+
+        <h2>Citas Programadas</h2>
+        <div id="listaCitas"></div>
+    </div>
+
+    <script>
+        document.getElementById('citaForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const cita = {
+                fecha: document.getElementById('fecha').value,
+                hora: document.getElementById('hora').value,
+                motivo: document.getElementById('motivo').value
+            };
+            
+            try {
+                const response = await fetch('http://localhost:8080/api/citas', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(cita)
+                });
+
+                if (response.ok) {
+                    alert("¡Cita guardada correctamente!");
+                    document.getElementById('citaForm').reset();
+                    cargarCitas();
+                } else {
+                    alert("El servidor de Java respondió, pero hubo un error al guardar en la Base de Datos.");
+                }
+            } catch (error) {
+                alert("Error grave: El frontend no puede comunicarse con Java en el puerto 8080.");
+                console.error(error);
+            }
+        });
+
+        async function cargarCitas() {
+            try {
+                const res = await fetch('http://localhost:8080/api/citas');
+                const citas = await res.json();
+                document.getElementById('listaCitas').innerHTML = citas.map(c => 
+                    `<div class="cita">
+                        <strong>Fecha:</strong> ${c.fecha} a las ${c.hora} <br> 
+                        <strong>Motivo:</strong> ${c.motivo} <br>
+                        <small>Estado: ${c.estado}</small>
+                    </div>`
+                ).reverse().join('');
+            } catch (error) {
+                document.getElementById('listaCitas').innerHTML = "<p style='color:red;'>No se pudieron cargar las citas. Verifica que el backend esté encendido.</p>";
+            }
+        }
+        
+        cargarCitas();
+    </script>
+</body>
+</html>
