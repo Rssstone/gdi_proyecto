@@ -51,9 +51,12 @@ Sin Docker: levanta MySQL en `localhost:3306` (usuario/contraseña `root`), ejec
   - Reprogramar (cambiar fecha, hora u odontólogo) regresa la cita a `Programada` para volver a confirmarla.
   - Cancelada, completada e inasistencia son estados finales.
   - Las citas completadas no se pueden eliminar (forman parte del historial del paciente).
+  - **Inasistencia libera el horario**: si el paciente no llegó, el resto de su tiempo vuelve a estar disponible
+    (cancelada e inasistencia no bloquean la agenda; programada, confirmada y completada sí).
 
 En la interfaz, la agenda lo muestra con colores: **verde** disponible, **rojo** ocupado, **gris tachado** hora
-pasada y **rayado** día cerrado; los bloques que ocupa una cita larga aparecen con borde punteado (“continúa”).
+pasada, **morado** cita atendida, **ámbar** paciente que no asistió y **rayado** día cerrado. Las citas que ya
+empezaron y siguen sin registrar parpadean con “Registrar asistencia”; los bloques que ocupa una cita larga aparecen con borde punteado (“continúa”).
 En el formulario solo se eligen horarios en verde; en **ámbar** aparecen los que están libres pero no alcanzan
 para la duración elegida.
 

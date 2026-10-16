@@ -136,7 +136,11 @@ public class AgendaService {
                         c.getEstado(), c.getHora(), c.getHoraFin(), !c.getHora().equals(hora));
             }
             if (!LocalDateTime.of(fecha, hora).isAfter(ahora)) {
-                return libre(hora, EstadoEspacio.PASADO);
+                // Hora pasada; si ahí había una cita a la que el paciente no llegó, se informa para mostrarla.
+                return inasistenciaQueCubre(citas, hora, hora.plusMinutes(bloque))
+                        .map(c -> new Espacio(hora, EstadoEspacio.PASADO, c.getId(), c.getPaciente().getNombreCompleto(),
+                                c.getEstado(), c.getHora(), c.getHoraFin(), !c.getHora().equals(hora)))
+                        .orElseGet(() -> libre(hora, EstadoEspacio.PASADO));
             }
             boolean alcanza = cabeAntesDelCierre(hora, duracion, horario.get())
                     && citaQueCubre(citas, hora, hora.plusMinutes(duracion)).isEmpty();
@@ -204,8 +208,17 @@ public class AgendaService {
                 .toList();
     }
 
+    /** Cita que ocupa algún minuto del rango (las de inasistencia no ocupan: liberan su horario). */
     private static Optional<Cita> citaQueCubre(List<Cita> citas, LocalTime inicio, LocalTime fin) {
-        return citas.stream().filter(c -> c.seEmpalmaCon(inicio, fin)).findFirst();
+        return citas.stream()
+                .filter(c -> EstadoCita.OCUPAN_HORARIO.contains(c.getEstado()) && c.seEmpalmaCon(inicio, fin))
+                .findFirst();
+    }
+
+    private static Optional<Cita> inasistenciaQueCubre(List<Cita> citas, LocalTime inicio, LocalTime fin) {
+        return citas.stream()
+                .filter(c -> c.getEstado() == EstadoCita.Inasistencia && c.seEmpalmaCon(inicio, fin))
+                .findFirst();
     }
 
     private static boolean cabeAntesDelCierre(LocalTime hora, int duracionMinutos, Horario horario) {

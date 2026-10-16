@@ -231,6 +231,27 @@ class CitasApplicationTests {
     }
 
     @Test
+    void inasistenciaSeRegistraYLiberaElRestoDelHorario() throws Exception {
+        // Juan tenía de 9:30 a 11:00 y no llegó; son las 10:05.
+        Cita cita = citaGuardada(juan, HOY, LocalTime.of(9, 30), EstadoCita.Confirmada);
+        cita.setDuracionMinutos(90);
+        citas.save(cita);
+        crear(maria, HOY, "10:30").andExpect(status().isConflict());
+
+        cambiarEstado(cita.getId(), "Inasistencia").andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("Inasistencia"));
+
+        mvc.perform(get("/api/agenda/disponibilidad").param("fecha", HOY.toString())
+                        .param("odontologoId", dra.getId().toString()))
+                .andExpect(jsonPath("$.espacios[1].estado").value("PASADO"))
+                .andExpect(jsonPath("$.espacios[1].estadoCita").value("Inasistencia"))
+                .andExpect(jsonPath("$.espacios[1].pacienteNombre").value("Juan Pérez"))
+                .andExpect(jsonPath("$.espacios[3].estado").value("DISPONIBLE"));
+        crear(maria, HOY, "10:30").andExpect(status().isCreated());
+        cambiarEstado(cita.getId(), "Completada").andExpect(status().isUnprocessableContent());
+    }
+
+    @Test
     void validaCamposObligatorios() throws Exception {
         mvc.perform(post("/api/citas").contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isBadRequest())
