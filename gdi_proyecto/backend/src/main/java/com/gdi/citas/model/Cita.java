@@ -38,6 +38,9 @@ public class Cita {
     @Column(nullable = false)
     private LocalTime hora;
 
+    @Column(name = "duracion_minutos", columnDefinition = "INT NOT NULL DEFAULT 30")
+    private Integer duracionMinutos = 30;
+
     private String motivo;
 
     @Enumerated(EnumType.STRING)
@@ -48,6 +51,15 @@ public class Cita {
 
     public LocalDateTime getInicio() {
         return LocalDateTime.of(fecha, hora);
+    }
+
+    public LocalTime getHoraFin() {
+        return hora.plusMinutes(duracionMinutos);
+    }
+
+    /** true si esta cita ocupa algún minuto del rango [inicio, fin). */
+    public boolean seEmpalmaCon(LocalTime inicio, LocalTime fin) {
+        return hora.isBefore(fin) && getHoraFin().isAfter(inicio);
     }
 
     public Integer getId() { return id; }
@@ -64,6 +76,9 @@ public class Cita {
 
     public LocalTime getHora() { return hora; }
     public void setHora(LocalTime hora) { this.hora = hora; }
+
+    public Integer getDuracionMinutos() { return duracionMinutos; }
+    public void setDuracionMinutos(Integer duracionMinutos) { this.duracionMinutos = duracionMinutos; }
 
     public String getMotivo() { return motivo; }
     public void setMotivo(String motivo) { this.motivo = motivo; }

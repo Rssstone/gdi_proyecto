@@ -41,6 +41,7 @@ CREATE TABLE citas (
     odontologo_id INT, 
     fecha DATE NOT NULL,
     hora TIME NOT NULL,
+    duracion_minutos INT NOT NULL DEFAULT 30,
     motivo VARCHAR(255),
     estado ENUM('Programada', 'Confirmada', 'Cancelada', 'Completada', 'Inasistencia') DEFAULT 'Programada',
     notas_recepcion TEXT,
@@ -104,8 +105,8 @@ INSERT INTO pacientes (nombre_completo, telefono) VALUES
 SET @d1 = DATE_ADD(CURDATE(), INTERVAL IF(DAYOFWEEK(DATE_ADD(CURDATE(), INTERVAL 1 DAY)) = 1, 2, 1) DAY);
 SET @d2 = DATE_ADD(@d1, INTERVAL IF(DAYOFWEEK(DATE_ADD(@d1, INTERVAL 1 DAY)) = 1, 2, 1) DAY);
 
-INSERT INTO citas (paciente_id, odontologo_id, fecha, hora, motivo, estado) VALUES
-(1, 1, @d1, '09:00:00', 'Limpieza dental', 'Confirmada'),
-(2, 1, @d1, '10:30:00', 'Revisión de ortodoncia', 'Programada'),
-(3, 1, @d1, '12:00:00', 'Dolor en muela', 'Programada'),
-(4, 1, @d2, '11:00:00', 'Valoración inicial', 'Programada');
+INSERT INTO citas (paciente_id, odontologo_id, fecha, hora, duracion_minutos, motivo, estado) VALUES
+(1, 1, @d1, '09:00:00', 60, 'Limpieza dental', 'Confirmada'),
+(2, 1, @d1, '10:30:00', 30, 'Revisión de ortodoncia', 'Programada'),
+(3, 1, @d1, '12:00:00', 90, 'Extracción de muela', 'Programada'),
+(4, 1, @d2, '11:00:00', 30, 'Valoración inicial', 'Programada');

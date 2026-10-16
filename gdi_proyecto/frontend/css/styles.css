@@ -98,6 +98,7 @@ textarea { resize: vertical; min-height: 70px; }
 input:focus, select:focus, textarea:focus { border-color: var(--azul-600); box-shadow: 0 0 0 3px rgba(36, 99, 184, .15); }
 .invalido, .invalido:focus { border-color: var(--rojo-600) !important; box-shadow: 0 0 0 3px rgba(214, 59, 59, .12) !important; }
 .fila-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fila-campos--3 { grid-template-columns: 1.3fr 1fr 1fr; }
 .error-form {
     background: var(--rojo-100); color: var(--rojo-600); border-radius: var(--radio-chico);
     padding: 10px 12px; font-size: 14px; font-weight: 600; margin: 0 0 14px;
@@ -223,6 +224,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--azul-600); box-s
 }
 .hueco__hora { font-weight: 800; font-size: 16px; display: flex; align-items: center; gap: 6px; }
 .hueco__texto { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hueco__sub { font-size: 11px; font-weight: 700; opacity: .8; }
 .hueco--DISPONIBLE { background: var(--verde-100); border-color: var(--verde-500); color: #3d6b0d; }
 .hueco--DISPONIBLE:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(95, 158, 28, .25); }
 .hueco--OCUPADO { background: var(--rojo-100); border-color: var(--rojo-600); color: #9b2323; }
@@ -230,6 +232,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--azul-600); box-s
 .hueco--PASADO { background: var(--gris-100); border-color: var(--gris-200); color: var(--gris-500); cursor: not-allowed; }
 .hueco--PASADO .hueco__hora { text-decoration: line-through; }
 .hueco--OCUPADO.hueco--historico { opacity: .7; }
+/* Bloques siguientes de una cita larga (p. ej. una extracción de 1 h ocupa 10:00 y 10:30). */
+.hueco--OCUPADO.hueco--continua { border-style: dashed; background: #fdf1f1; }
 .hueco--solo-lectura.hueco--DISPONIBLE { cursor: default; }
 .hueco--solo-lectura.hueco--DISPONIBLE:hover { transform: none; box-shadow: none; }
 .hueco .badge { position: absolute; top: 8px; right: 8px; }
@@ -312,8 +316,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--azul-600); box-s
     padding: 7px 0; font-weight: 800; font-size: 13px; cursor: pointer;
 }
 .selector-horas button:hover:not(:disabled) { background: #dcefc3; }
-.selector-horas button.elegida { background: var(--azul-600); border-color: var(--azul-600); color: var(--blanco); }
+.selector-horas button.elegida, .selector-horas button.elegida:hover { background: var(--azul-600); border-color: var(--azul-600); color: var(--blanco); }
 .selector-horas button.ocupada { background: var(--rojo-100); border-color: #f0b4b4; color: var(--rojo-600); cursor: not-allowed; text-decoration: line-through; }
+.selector-horas button.corta { background: var(--ambar-100); border-color: #f1cf8f; color: var(--ambar-600); cursor: not-allowed; }
 .selector-horas button.pasada { background: var(--gris-100); border-color: var(--gris-200); color: var(--gris-500); cursor: not-allowed; text-decoration: line-through; }
 .aviso { padding: 10px 12px; border-radius: var(--radio-chico); font-size: 13px; font-weight: 600; }
 .aviso--info { background: var(--azul-50); color: var(--azul-700); }

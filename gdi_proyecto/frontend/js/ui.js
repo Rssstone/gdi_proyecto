@@ -59,11 +59,21 @@ const Fecha = {
         if (iso === Fecha.sumarDias(hoy, -1)) return 'Ayer';
         return null;
     },
+    duracion(minutos) {
+        const h = Math.floor(minutos / 60), m = minutos % 60;
+        return [h ? `${h} h` : '', m ? `${m} min` : ''].filter(Boolean).join(' ');
+    },
     hora12(hhmm) {
         const [h, m] = hhmm.split(':').map(Number);
         return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'a. m.' : 'p. m.'}`;
     },
 };
+
+function sumarMinutos(hhmm, minutos) {
+    const [h, m] = hhmm.split(':').map(Number);
+    const total = h * 60 + m + minutos;
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
 
 /* ---------- Notificaciones ---------- */
 function toast(mensaje, tipo = 'ok') {

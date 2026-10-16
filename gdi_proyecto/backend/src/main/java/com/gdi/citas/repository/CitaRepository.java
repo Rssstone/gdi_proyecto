@@ -1,7 +1,6 @@
 package com.gdi.citas.repository;
 
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.Collection;
 import java.util.List;
 
@@ -25,18 +24,20 @@ public interface CitaRepository extends JpaRepository<Cita, Integer> {
     List<Cita> findByFechaBetweenAndEstadoInOrderByFechaAscHoraAsc(
             LocalDate desde, LocalDate hasta, Collection<EstadoCita> estados);
 
-    /** Cuenta las citas activas que chocan con un horario, ya sea por el odontólogo o por el paciente. */
+    /**
+     * Citas activas del día que comparten odontólogo o paciente con la cita que se quiere guardar.
+     * El servicio revisa después si sus horarios se enciman (depende de la duración de cada una).
+     */
     @Query("""
-            select count(c) from Cita c left join c.odontologo o
-            where c.fecha = :fecha and c.hora = :hora
+            select c from Cita c left join c.odontologo o
+            where c.fecha = :fecha
               and c.estado in :estados
               and (:excluirId is null or c.id <> :excluirId)
               and (o.id = :odontologoId or c.paciente.id = :pacienteId)
             """)
-    long contarConflictos(@Param("fecha") LocalDate fecha,
-                          @Param("hora") LocalTime hora,
-                          @Param("odontologoId") Integer odontologoId,
-                          @Param("pacienteId") Integer pacienteId,
-                          @Param("excluirId") Integer excluirId,
-                          @Param("estados") Collection<EstadoCita> estados);
+    List<Cita> buscarPosiblesConflictos(@Param("fecha") LocalDate fecha,
+                                        @Param("odontologoId") Integer odontologoId,
+                                        @Param("pacienteId") Integer pacienteId,
+                                        @Param("excluirId") Integer excluirId,
+                                        @Param("estados") Collection<EstadoCita> estados);
 }

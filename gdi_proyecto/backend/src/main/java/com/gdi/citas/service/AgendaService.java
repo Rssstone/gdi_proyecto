@@ -15,7 +15,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -79,8 +78,11 @@ public class AgendaService {
         return espacios;
     }
 
-    /** Lanza una excepción si la fecha/hora no se puede agendar: pasada, día cerrado o fuera de horario. */
-    public void validarHorario(LocalDate fecha, LocalTime hora) {
+    /**
+     * Lanza una excepción si la cita no se puede agendar: fecha u hora pasada, día cerrado,
+     * hora fuera de horario o duración que termina después del cierre.
+     */
+    public void validarHorario(LocalDate fecha, LocalTime hora, int duracionMinutos) {
         LocalDateTime ahora = ahora();
         if (fecha.isBefore(ahora.toLocalDate())) {
             throw new ReglaNegocioException("No se pueden agendar citas en fechas pasadas.");
@@ -92,32 +94,53 @@ public class AgendaService {
                     + horario.getApertura() + " a " + horario.getCierre() + ") y en intervalos de "
                     + clinica.getIntervaloMinutos() + " minutos.");
         }
+        if (duracionMinutos % clinica.getIntervaloMinutos() != 0) {
+            throw new ReglaNegocioException("La duración debe ser múltiplo de "
+                    + clinica.getIntervaloMinutos() + " minutos.");
+        }
+        if (!cabeAntesDelCierre(hora, duracionMinutos, horario)) {
+            throw new ReglaNegocioException("Una cita de " + duracionMinutos + " minutos a las " + hora
+                    + " terminaría a las " + hora.plusMinutes(duracionMinutos) + ", después del cierre ("
+                    + horario.getCierre() + ").");
+        }
         if (!LocalDateTime.of(fecha, hora).isAfter(ahora)) {
             throw new ReglaNegocioException("Esa hora ya pasó. Elige un horario posterior a las "
                     + ahora.toLocalTime() + ".");
         }
     }
 
+    /**
+     * Estado de cada horario del día. Con {@code duracionMinutos} mayor a un bloque, un horario libre
+     * solo se marca DISPONIBLE si la cita completa cabe sin encimarse con otra ni pasar del cierre.
+     */
     @Transactional(readOnly = true)
-    public Disponibilidad disponibilidad(LocalDate fecha, Integer odontologoId, Integer excluirCitaId) {
+    public Disponibilidad disponibilidad(LocalDate fecha, Integer odontologoId, Integer excluirCitaId,
+                                         Integer duracionMinutos) {
         Optional<Horario> horario = horario(fecha);
         if (horario.isEmpty()) {
             return new Disponibilidad(fecha, false,
                     "La clínica no atiende los " + nombreDia(fecha.getDayOfWeek()) + ".", 0, List.of());
         }
-        Map<LocalTime, Cita> ocupadas = citasDelRango(fecha, fecha, odontologoId).stream()
+        List<Cita> citas = citasDelRango(fecha, fecha, odontologoId).stream()
                 .filter(c -> !Objects.equals(c.getId(), excluirCitaId))
-                .collect(Collectors.toMap(Cita::getHora, Function.identity(), (a, b) -> a));
+                .toList();
+        int bloque = clinica.getIntervaloMinutos();
+        int duracion = duracionMinutos == null ? bloque : duracionMinutos;
 
         LocalDateTime ahora = ahora();
         List<Espacio> espacios = espaciosDelDia(fecha).stream().map(hora -> {
-            Cita cita = ocupadas.get(hora);
-            if (cita != null) {
-                return new Espacio(hora, EstadoEspacio.OCUPADO, cita.getId(),
-                        cita.getPaciente().getNombreCompleto(), cita.getEstado());
+            Optional<Cita> cubre = citaQueCubre(citas, hora, hora.plusMinutes(bloque));
+            if (cubre.isPresent()) {
+                Cita c = cubre.get();
+                return new Espacio(hora, EstadoEspacio.OCUPADO, c.getId(), c.getPaciente().getNombreCompleto(),
+                        c.getEstado(), c.getHora(), c.getHoraFin(), !c.getHora().equals(hora));
             }
-            boolean pasado = !LocalDateTime.of(fecha, hora).isAfter(ahora);
-            return new Espacio(hora, pasado ? EstadoEspacio.PASADO : EstadoEspacio.DISPONIBLE, null, null, null);
+            if (!LocalDateTime.of(fecha, hora).isAfter(ahora)) {
+                return libre(hora, EstadoEspacio.PASADO);
+            }
+            boolean alcanza = cabeAntesDelCierre(hora, duracion, horario.get())
+                    && citaQueCubre(citas, hora, hora.plusMinutes(duracion)).isEmpty();
+            return libre(hora, alcanza ? EstadoEspacio.DISPONIBLE : EstadoEspacio.INSUFICIENTE);
         }).toList();
 
         int disponibles = (int) espacios.stream().filter(e -> e.estado() == EstadoEspacio.DISPONIBLE).count();
@@ -135,15 +158,16 @@ public class AgendaService {
         Map<LocalDate, List<Cita>> porDia = citasDelRango(desde, hasta, odontologoId).stream()
                 .collect(Collectors.groupingBy(Cita::getFecha));
         LocalDateTime ahora = ahora();
+        int bloque = clinica.getIntervaloMinutos();
 
         List<ResumenDia> dias = new ArrayList<>();
         for (LocalDate f = desde; !f.isAfter(hasta); f = f.plusDays(1)) {
             List<Cita> citas = porDia.getOrDefault(f, List.of());
             List<LocalTime> espacios = espaciosDelDia(f);
-            var horasOcupadas = citas.stream().map(Cita::getHora).collect(Collectors.toSet());
             final LocalDate fecha = f;
             int disponibles = (int) espacios.stream()
-                    .filter(h -> LocalDateTime.of(fecha, h).isAfter(ahora) && !horasOcupadas.contains(h))
+                    .filter(h -> LocalDateTime.of(fecha, h).isAfter(ahora)
+                            && citaQueCubre(citas, h, h.plusMinutes(bloque)).isEmpty())
                     .count();
 
             EstadoDia estado;
@@ -178,6 +202,19 @@ public class AgendaService {
                 .filter(c -> odontologoId == null
                         || (c.getOdontologo() != null && odontologoId.equals(c.getOdontologo().getId())))
                 .toList();
+    }
+
+    private static Optional<Cita> citaQueCubre(List<Cita> citas, LocalTime inicio, LocalTime fin) {
+        return citas.stream().filter(c -> c.seEmpalmaCon(inicio, fin)).findFirst();
+    }
+
+    private static boolean cabeAntesDelCierre(LocalTime hora, int duracionMinutos, Horario horario) {
+        LocalTime fin = hora.plusMinutes(duracionMinutos);
+        return !fin.isAfter(horario.getCierre()) && fin.isAfter(hora);
+    }
+
+    private static Espacio libre(LocalTime hora, EstadoEspacio estado) {
+        return new Espacio(hora, estado, null, null, null, null, null, false);
     }
 
     private static String nombreDia(DayOfWeek dia) {
