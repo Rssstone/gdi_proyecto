@@ -102,25 +102,7 @@ const Agenda = {
                 return;
             }
             const gestion = App.puede('gestion');
-            cont.innerHTML = disp.espacios.map(e => {
-                let texto = e.estado === 'PASADO' ? 'Hora pasada' : gestion ? 'Disponible · agendar' : 'Disponible';
-                if (e.estado === 'OCUPADO') {
-                    texto = e.continuacion
-                        ? `↳ continúa · ${esc(e.pacienteNombre)}`
-                        : `${esc(e.pacienteNombre)}</span><span class="hueco__sub">hasta ${Fecha.hora12(e.citaFin)}`;
-                }
-                const extra = [e.estado === 'OCUPADO' && pasado ? 'hueco--historico' : '',
-                    e.continuacion ? 'hueco--continua' : ''].join(' ');
-                const soloLectura = !gestion ? 'hueco--solo-lectura' : '';
-                return `<button class="hueco hueco--${e.estado} ${extra} ${soloLectura}" data-hora="${e.hora}" data-estado="${e.estado}"
-                            ${e.citaId ? `data-cita="${e.citaId}"` : ''}
-                            title="${e.estado === 'PASADO' ? 'Esta hora ya pasó, no se puede agendar'
-                                : e.estado === 'OCUPADO' ? esc(`${e.pacienteNombre}: ${Fecha.hora12(e.citaInicio)} a ${Fecha.hora12(e.citaFin)}`) : ''}">
-                    <span class="hueco__hora">${icono(e.estado === 'PASADO' ? 'candado' : e.estado === 'OCUPADO' ? 'usuario' : 'reloj')}${Fecha.hora12(e.hora)}</span>
-                    <span class="hueco__texto">${texto}</span>
-                    ${e.estadoCita && !e.continuacion ? `<span class="badge badge--${e.estadoCita}" title="${e.estadoCita}"></span>` : ''}
-                </button>`;
-            }).join('');
+            cont.innerHTML = disp.espacios.map(e => this.pintarHueco(e, gestion, pasado)).join('');
             cont.querySelectorAll('.hueco').forEach(b => b.onclick = () => this.clicHueco(b));
         } catch (err) {
             mensaje.textContent = '';
@@ -128,9 +110,49 @@ const Agenda = {
         }
     },
 
+    /**
+     * Un horario de la cuadrícula. Las citas se pintan según su estado:
+     * pendientes en rojo, completadas en morado y las de inasistencia en ámbar (ya no bloquean el horario).
+     */
+    pintarHueco(e, gestion, diaPasado) {
+        const noAsistio = e.estadoCita === 'Inasistencia';
+        let texto = e.estado === 'PASADO' ? 'Hora pasada' : gestion ? 'Disponible · agendar' : 'Disponible';
+        let sub = '';
+        let ic = e.estado === 'PASADO' ? 'candado' : 'reloj';
+        if (e.citaId) {
+            ic = noAsistio ? 'alerta' : 'usuario';
+            if (e.continuacion) {
+                texto = `↳ continúa · ${esc(e.pacienteNombre)}`;
+            } else {
+                texto = esc(e.pacienteNombre);
+                sub = `${noAsistio ? 'No asistió' : e.estadoCita} · hasta ${Fecha.hora12(e.citaFin)}`;
+                // Ya empezó y sigue pendiente: hay que registrar si llegó o no.
+                if (['Programada', 'Confirmada'].includes(e.estadoCita) && `${this.dia}T${e.citaInicio}` <= App.ahora) {
+                    sub = 'Registrar asistencia';
+                }
+            }
+        }
+        const clases = ['hueco', `hueco--${e.estado}`,
+            e.estado === 'OCUPADO' && diaPasado ? 'hueco--historico' : '',
+            e.continuacion ? 'hueco--continua' : '',
+            e.estadoCita === 'Completada' ? 'hueco--completada' : '',
+            sub === 'Registrar asistencia' ? 'hueco--pendiente' : '',
+            noAsistio ? 'hueco--inasistencia' : '',
+            !gestion ? 'hueco--solo-lectura' : ''].filter(Boolean).join(' ');
+        const titulo = e.citaId
+            ? `${e.pacienteNombre}: ${Fecha.hora12(e.citaInicio)} a ${Fecha.hora12(e.citaFin)} (${noAsistio ? 'no asistió' : e.estadoCita})`
+            : e.estado === 'PASADO' ? 'Esta hora ya pasó, no se puede agendar' : '';
+        return `<button class="${clases}" data-hora="${e.hora}" data-estado="${e.estado}"
+                    ${e.citaId ? `data-cita="${e.citaId}"` : ''} title="${esc(titulo)}">
+            <span class="hueco__hora">${icono(sub === 'Registrar asistencia' ? 'alerta' : ic)}${Fecha.hora12(e.hora)}</span>
+            <span class="hueco__texto">${texto}</span>
+            ${sub ? `<span class="hueco__sub">${esc(sub)}</span>` : ''}
+        </button>`;
+    },
+
     clicHueco(boton) {
         const { estado, hora, cita } = boton.dataset;
-        if (estado === 'OCUPADO') return CitasVista.verDetalle(Number(cita));
+        if (cita) return CitasVista.verDetalle(Number(cita));
         if (estado === 'PASADO') return toast('Esa hora ya pasó; no se pueden agendar citas en el pasado.', 'error');
         if (!App.puede('gestion')) return toast('Solo recepción o administración pueden agendar citas.', 'info');
         CitasVista.abrirFormulario({ fecha: this.dia, hora, odontologoId: this.odontologoId });

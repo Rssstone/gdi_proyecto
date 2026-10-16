@@ -168,7 +168,7 @@ public class CitaService {
     /** Rechaza la cita si su rango [hora, hora + duración) se encima con otra cita activa. */
     private void validarConflictos(Cita cita) {
         citaRepository.buscarPosiblesConflictos(cita.getFecha(), cita.getOdontologo().getId(),
-                        cita.getPaciente().getId(), cita.getId(), EstadoCita.ACTIVOS).stream()
+                        cita.getPaciente().getId(), cita.getId(), EstadoCita.OCUPAN_HORARIO).stream()
                 .filter(otra -> otra.seEmpalmaCon(cita.getHora(), cita.getHoraFin()))
                 .findFirst()
                 .ifPresent(otra -> {

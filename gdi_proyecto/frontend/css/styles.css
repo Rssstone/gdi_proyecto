@@ -212,6 +212,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--azul-600); box-s
 .punto { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
 .punto--libre { background: var(--verde-100); border: 2px solid var(--verde-500); }
 .punto--lleno { background: var(--rojo-100); border: 2px solid var(--rojo-600); }
+.punto--completada { background: var(--morado-100); border: 2px solid var(--morado-600); }
+.punto--inasistencia { background: var(--ambar-100); border: 2px solid var(--ambar-600); }
 .punto--pasado { background: var(--gris-200); border: 2px solid var(--gris-300); }
 .punto--cerrado { background: repeating-linear-gradient(-45deg, var(--gris-300), var(--gris-300) 2px, var(--blanco) 2px, var(--blanco) 4px); border: 1px solid var(--gris-300); }
 
@@ -225,6 +227,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--azul-600); box-s
 .hueco__hora { font-weight: 800; font-size: 16px; display: flex; align-items: center; gap: 6px; }
 .hueco__texto { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hueco__sub { font-size: 11px; font-weight: 700; opacity: .8; }
+.hueco--pendiente .hueco__sub { opacity: 1; text-decoration: underline; }
+.hueco--pendiente { animation: latido 1.6s ease-in-out infinite; }
+@keyframes latido { 50% { box-shadow: 0 0 0 4px rgba(214, 59, 59, .18); } }
 .hueco--DISPONIBLE { background: var(--verde-100); border-color: var(--verde-500); color: #3d6b0d; }
 .hueco--DISPONIBLE:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(95, 158, 28, .25); }
 .hueco--OCUPADO { background: var(--rojo-100); border-color: var(--rojo-600); color: #9b2323; }
@@ -234,6 +239,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--azul-600); box-s
 .hueco--OCUPADO.hueco--historico { opacity: .7; }
 /* Bloques siguientes de una cita larga (p. ej. una extracción de 1 h ocupa 10:00 y 10:30). */
 .hueco--OCUPADO.hueco--continua { border-style: dashed; background: #fdf1f1; }
+.hueco--OCUPADO.hueco--completada { background: var(--morado-100); border-color: var(--morado-600); color: #4a2fa0; }
+/* El paciente no llegó: se muestra para consulta, pero el horario ya no bloquea la agenda. */
+.hueco--PASADO.hueco--inasistencia { background: var(--ambar-100); border-color: #f1cf8f; color: var(--ambar-600); cursor: pointer; }
+.hueco--PASADO.hueco--inasistencia .hueco__hora { text-decoration: none; }
 .hueco--solo-lectura.hueco--DISPONIBLE { cursor: default; }
 .hueco--solo-lectura.hueco--DISPONIBLE:hover { transform: none; box-shadow: none; }
 .hueco .badge { position: absolute; top: 8px; right: 8px; }
