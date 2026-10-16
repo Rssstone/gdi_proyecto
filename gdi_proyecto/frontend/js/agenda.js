@@ -103,19 +103,22 @@ const Agenda = {
             }
             const gestion = App.puede('gestion');
             cont.innerHTML = disp.espacios.map(e => {
-                const texto = {
-                    DISPONIBLE: gestion ? 'Disponible · agendar' : 'Disponible',
-                    OCUPADO: esc(e.pacienteNombre),
-                    PASADO: 'Hora pasada',
-                }[e.estado];
-                const extra = e.estado === 'OCUPADO' && pasado ? 'hueco--historico' : '';
+                let texto = e.estado === 'PASADO' ? 'Hora pasada' : gestion ? 'Disponible · agendar' : 'Disponible';
+                if (e.estado === 'OCUPADO') {
+                    texto = e.continuacion
+                        ? `↳ continúa · ${esc(e.pacienteNombre)}`
+                        : `${esc(e.pacienteNombre)}</span><span class="hueco__sub">hasta ${Fecha.hora12(e.citaFin)}`;
+                }
+                const extra = [e.estado === 'OCUPADO' && pasado ? 'hueco--historico' : '',
+                    e.continuacion ? 'hueco--continua' : ''].join(' ');
                 const soloLectura = !gestion ? 'hueco--solo-lectura' : '';
                 return `<button class="hueco hueco--${e.estado} ${extra} ${soloLectura}" data-hora="${e.hora}" data-estado="${e.estado}"
                             ${e.citaId ? `data-cita="${e.citaId}"` : ''}
-                            title="${e.estado === 'PASADO' ? 'Esta hora ya pasó, no se puede agendar' : ''}">
+                            title="${e.estado === 'PASADO' ? 'Esta hora ya pasó, no se puede agendar'
+                                : e.estado === 'OCUPADO' ? esc(`${e.pacienteNombre}: ${Fecha.hora12(e.citaInicio)} a ${Fecha.hora12(e.citaFin)}`) : ''}">
                     <span class="hueco__hora">${icono(e.estado === 'PASADO' ? 'candado' : e.estado === 'OCUPADO' ? 'usuario' : 'reloj')}${Fecha.hora12(e.hora)}</span>
                     <span class="hueco__texto">${texto}</span>
-                    ${e.estadoCita ? `<span class="badge badge--${e.estadoCita}" title="${e.estadoCita}"></span>` : ''}
+                    ${e.estadoCita && !e.continuacion ? `<span class="badge badge--${e.estadoCita}" title="${e.estadoCita}"></span>` : ''}
                 </button>`;
             }).join('');
             cont.querySelectorAll('.hueco').forEach(b => b.onclick = () => this.clicHueco(b));

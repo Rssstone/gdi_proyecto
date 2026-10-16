@@ -39,8 +39,8 @@ const Api = {
     odontologos: () => peticion('/usuarios/odontologos'),
 
     configuracion: () => peticion('/agenda/configuracion'),
-    disponibilidad: (fecha, odontologoId, excluirCitaId) =>
-        peticion('/agenda/disponibilidad', { params: { fecha, odontologoId, excluirCitaId } }),
+    disponibilidad: (fecha, odontologoId, excluirCitaId, duracion) =>
+        peticion('/agenda/disponibilidad', { params: { fecha, odontologoId, excluirCitaId, duracion } }),
     resumen: (desde, hasta, odontologoId) => peticion('/agenda/resumen', { params: { desde, hasta, odontologoId } }),
 
     citas: (filtros) => peticion('/citas', { params: filtros }),

@@ -33,8 +33,9 @@ public class AgendaController {
     public Disponibilidad disponibilidad(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
             @RequestParam(required = false) Integer odontologoId,
-            @RequestParam(required = false) Integer excluirCitaId) {
-        return agendaService.disponibilidad(fecha, odontologoId, excluirCitaId);
+            @RequestParam(required = false) Integer excluirCitaId,
+            @RequestParam(required = false) Integer duracion) {
+        return agendaService.disponibilidad(fecha, odontologoId, excluirCitaId, duracion);
     }
 
     @GetMapping("/resumen")

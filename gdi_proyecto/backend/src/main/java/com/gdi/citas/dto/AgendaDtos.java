@@ -15,7 +15,11 @@ public final class AgendaDtos {
     private AgendaDtos() {
     }
 
-    public enum EstadoEspacio { DISPONIBLE, OCUPADO, PASADO }
+    /**
+     * DISPONIBLE: libre. OCUPADO: lo cubre una cita. PASADO: la hora ya pasó.
+     * INSUFICIENTE: está libre, pero no alcanza para la duración pedida (choca con otra cita o con el cierre).
+     */
+    public enum EstadoEspacio { DISPONIBLE, OCUPADO, PASADO, INSUFICIENTE }
 
     public enum EstadoDia { DISPONIBLE, LLENO, PASADO, CERRADO }
 
@@ -24,7 +28,10 @@ public final class AgendaDtos {
             EstadoEspacio estado,
             Integer citaId,
             String pacienteNombre,
-            EstadoCita estadoCita) {
+            EstadoCita estadoCita,
+            @JsonFormat(pattern = "HH:mm") LocalTime citaInicio,
+            @JsonFormat(pattern = "HH:mm") LocalTime citaFin,
+            boolean continuacion) {
     }
 
     public record Disponibilidad(

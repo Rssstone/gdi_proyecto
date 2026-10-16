@@ -11,6 +11,8 @@ public record CitaResponse(
         Integer id,
         LocalDate fecha,
         @JsonFormat(pattern = "HH:mm") LocalTime hora,
+        @JsonFormat(pattern = "HH:mm") LocalTime horaFin,
+        int duracionMinutos,
         String motivo,
         EstadoCita estado,
         String notasRecepcion,
@@ -24,7 +26,7 @@ public record CitaResponse(
     public static CitaResponse de(Cita c, boolean pasada) {
         var p = c.getPaciente();
         var o = c.getOdontologo();
-        return new CitaResponse(c.getId(), c.getFecha(), c.getHora(), c.getMotivo(), c.getEstado(),
+        return new CitaResponse(c.getId(), c.getFecha(), c.getHora(), c.getHoraFin(), c.getDuracionMinutos(), c.getMotivo(), c.getEstado(),
                 c.getNotasRecepcion(),
                 p.getId(), p.getNombreCompleto(), p.getTelefono(),
                 o == null ? null : o.getId(), o == null ? null : o.getNombreCompleto(),

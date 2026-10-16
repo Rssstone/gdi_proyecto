@@ -71,7 +71,7 @@ public class CitaService {
     public CitaResponse crear(CitaRequest req) {
         Cita cita = new Cita();
         aplicarDatos(cita, req);
-        agenda.validarHorario(req.fecha(), req.hora());
+        agenda.validarHorario(cita.getFecha(), cita.getHora(), cita.getDuracionMinutos());
         validarConflictos(cita);
         cita.setEstado(EstadoCita.Programada);
         return aRespuesta(citaRepository.save(cita));
@@ -88,10 +88,11 @@ public class CitaService {
             throw new ReglaNegocioException("No se puede modificar una cita cuya hora ya pasó.");
         }
         boolean reprogramada = !req.fecha().equals(cita.getFecha()) || !req.hora().equals(cita.getHora())
+                || req.duracionOPredeterminada() != cita.getDuracionMinutos()
                 || !Objects.equals(req.odontologoId(), cita.getOdontologo() == null ? null : cita.getOdontologo().getId());
 
         aplicarDatos(cita, req);
-        agenda.validarHorario(cita.getFecha(), cita.getHora());
+        agenda.validarHorario(cita.getFecha(), cita.getHora(), cita.getDuracionMinutos());
         validarConflictos(cita);
         if (reprogramada) {
             // Un cambio de horario requiere volver a confirmar con el paciente.
@@ -158,18 +159,23 @@ public class CitaService {
         cita.setOdontologo(odontologo);
         cita.setFecha(req.fecha());
         cita.setHora(req.hora());
+        cita.setDuracionMinutos(req.duracionOPredeterminada());
         cita.setMotivo(req.motivo().trim());
         cita.setNotasRecepcion(req.notasRecepcion() == null || req.notasRecepcion().isBlank()
                 ? null : req.notasRecepcion().trim());
     }
 
+    /** Rechaza la cita si su rango [hora, hora + duración) se encima con otra cita activa. */
     private void validarConflictos(Cita cita) {
-        long conflictos = citaRepository.contarConflictos(cita.getFecha(), cita.getHora(),
-                cita.getOdontologo().getId(), cita.getPaciente().getId(), cita.getId(), EstadoCita.ACTIVOS);
-        if (conflictos > 0) {
-            throw ReglaNegocioException.conflicto("El horario " + cita.getHora() + " del " + cita.getFecha()
-                    + " ya está ocupado para el odontólogo o el paciente. Elige otro horario.");
-        }
+        citaRepository.buscarPosiblesConflictos(cita.getFecha(), cita.getOdontologo().getId(),
+                        cita.getPaciente().getId(), cita.getId(), EstadoCita.ACTIVOS).stream()
+                .filter(otra -> otra.seEmpalmaCon(cita.getHora(), cita.getHoraFin()))
+                .findFirst()
+                .ifPresent(otra -> {
+                    throw ReglaNegocioException.conflicto("El horario de " + cita.getHora() + " a " + cita.getHoraFin()
+                            + " se empalma con la cita de " + otra.getPaciente().getNombreCompleto()
+                            + " (" + otra.getHora() + " a " + otra.getHoraFin() + "). Elige otro horario o una duración menor.");
+                });
     }
 
     private Cita buscar(Integer id) {

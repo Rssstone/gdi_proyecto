@@ -182,6 +182,55 @@ class CitasApplicationTests {
     }
 
     @Test
+    void unaCitaLargaOcupaVariosBloques() throws Exception {
+        mvc.perform(post("/api/citas").contentType(MediaType.APPLICATION_JSON).content(json(juan, MANANA, "10:00", 60)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.horaFin").value("11:00"))
+                .andExpect(jsonPath("$.duracionMinutos").value(60));
+        // 10:30 cae dentro de la extracción de 10:00 a 11:00
+        crear(maria, MANANA, "10:30").andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje", containsString("se empalma")));
+        crear(maria, MANANA, "11:00").andExpect(status().isCreated());
+    }
+
+    @Test
+    void unaCitaLargaNoPuedeEncimarseConLaSiguiente() throws Exception {
+        citaGuardada(maria, MANANA, LocalTime.of(11, 0), EstadoCita.Programada);
+        mvc.perform(post("/api/citas").contentType(MediaType.APPLICATION_JSON).content(json(juan, MANANA, "10:30", 60)))
+                .andExpect(status().isConflict());
+        mvc.perform(post("/api/citas").contentType(MediaType.APPLICATION_JSON).content(json(juan, MANANA, "10:00", 60)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void unaCitaNoPuedeTerminarDespuesDelCierre() throws Exception {
+        mvc.perform(post("/api/citas").contentType(MediaType.APPLICATION_JSON).content(json(juan, MANANA, "18:30", 60)))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.mensaje", containsString("después del cierre")));
+        mvc.perform(post("/api/citas").contentType(MediaType.APPLICATION_JSON).content(json(juan, MANANA, "18:00", 45)))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.mensaje", containsString("múltiplo")));
+    }
+
+    @Test
+    void disponibilidadConsideraLaDuracion() throws Exception {
+        Cita larga = citaGuardada(juan, MANANA, LocalTime.of(10, 0), EstadoCita.Programada);
+        larga.setDuracionMinutos(90);
+        citas.save(larga);
+        mvc.perform(get("/api/agenda/disponibilidad").param("fecha", MANANA.toString())
+                        .param("odontologoId", dra.getId().toString()).param("duracion", "60"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.espacios[0].estado").value("DISPONIBLE"))     // 09:00-10:00 cabe
+                .andExpect(jsonPath("$.espacios[1].estado").value("INSUFICIENTE"))   // 09:30-10:30 choca
+                .andExpect(jsonPath("$.espacios[2].estado").value("OCUPADO"))
+                .andExpect(jsonPath("$.espacios[2].continuacion").value(false))
+                .andExpect(jsonPath("$.espacios[4].estado").value("OCUPADO"))       // 11:00 sigue ocupado
+                .andExpect(jsonPath("$.espacios[4].continuacion").value(true))
+                .andExpect(jsonPath("$.espacios[5].estado").value("DISPONIBLE"))     // 11:30 libre
+                .andExpect(jsonPath("$.espacios[19].estado").value("INSUFICIENTE")); // 18:30 + 60 pasa el cierre
+    }
+
+    @Test
     void validaCamposObligatorios() throws Exception {
         mvc.perform(post("/api/citas").contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isBadRequest())
@@ -212,9 +261,13 @@ class CitasApplicationTests {
     }
 
     private String json(Paciente p, LocalDate fecha, String hora) {
+        return json(p, fecha, hora, 30);
+    }
+
+    private String json(Paciente p, LocalDate fecha, String hora, int duracion) {
         return """
-                {"pacienteId":%d,"odontologoId":%d,"fecha":"%s","hora":"%s","motivo":"Limpieza dental"}
-                """.formatted(p.getId(), dra.getId(), fecha, hora);
+                {"pacienteId":%d,"odontologoId":%d,"fecha":"%s","hora":"%s","duracionMinutos":%d,"motivo":"Limpieza dental"}
+                """.formatted(p.getId(), dra.getId(), fecha, hora, duracion);
     }
 
     private Paciente paciente(String nombre, String telefono) {

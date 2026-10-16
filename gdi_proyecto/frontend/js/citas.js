@@ -1,6 +1,16 @@
 /* Citas: listado con filtros, formulario de alta/reprogramación y detalle con acciones de estado. */
 
-const MOTIVOS_FRECUENTES = ['Revisión general', 'Limpieza dental', 'Resina', 'Extracción', 'Ortodoncia', 'Endodoncia', 'Urgencia'];
+/* Duración sugerida de cada procedimiento (la recepcionista puede ajustarla). */
+const MOTIVOS_FRECUENTES = [
+    { nombre: 'Revisión general', minutos: 30 },
+    { nombre: 'Limpieza dental', minutos: 60 },
+    { nombre: 'Resina', minutos: 60 },
+    { nombre: 'Extracción', minutos: 60 },
+    { nombre: 'Ortodoncia', minutos: 30 },
+    { nombre: 'Endodoncia', minutos: 90 },
+    { nombre: 'Urgencia', minutos: 30 },
+];
+const DURACIONES = [30, 60, 90, 120, 150, 180, 210, 240];
 
 const CitasVista = {
     rango: 'proximas',
@@ -67,7 +77,7 @@ const CitasVista = {
             }
             return grupo + `
                 <tr data-id="${c.id}" class="${c.pasada ? 'fila-pasada' : ''}">
-                    <td><strong>${Fecha.hora12(c.hora)}</strong></td>
+                    <td><strong>${Fecha.hora12(c.hora)}</strong><small>hasta ${Fecha.hora12(c.horaFin)}</small></td>
                     <td><strong>${esc(c.pacienteNombre)}</strong><small>${esc(c.pacienteTelefono || 'Sin teléfono')}</small></td>
                     <td>${esc(c.motivo || '—')}</td>
                     <td>${esc(c.odontologoNombre || '—')}</td>
@@ -137,7 +147,7 @@ const CitasVista = {
                 <div class="detalle__fecha"><span>${MESES[d.getMonth()].slice(0, 3)}</span><b>${d.getDate()}</b><span>${DIAS[d.getDay()].slice(0, 3)}</span></div>
                 <div>
                     <h4>${esc(c.pacienteNombre)}</h4>
-                    <div>${Fecha.hora12(c.hora)} · ${esc(Fecha.larga(c.fecha))}</div>
+                    <div>${Fecha.hora12(c.hora)} – ${Fecha.hora12(c.horaFin)} · ${esc(Fecha.larga(c.fecha))}</div>
                     <span class="badge badge--${c.estado}">${c.estado}</span>
                 </div>
             </div>
@@ -147,6 +157,7 @@ const CitasVista = {
                 <div class="detalle__dato"><small>Odontólogo</small><strong>${esc(c.odontologoNombre || '—')}</strong></div>
                 <div class="detalle__dato"><small>Teléfono</small><strong>${c.pacienteTelefono
                     ? `<a href="tel:${esc(c.pacienteTelefono)}">${esc(c.pacienteTelefono)}</a>` : '—'}</strong></div>
+                <div class="detalle__dato"><small>Duración</small><strong>${Fecha.duracion(c.duracionMinutos)}</strong></div>
                 <div class="detalle__dato"><small>Folio</small><strong>#${c.id}</strong></div>
                 ${c.notasRecepcion ? `<div class="detalle__dato detalle__ancho"><small>Notas</small>
                     <p class="detalle__notas">${esc(c.notasRecepcion)}</p></div>` : ''}
@@ -232,6 +243,7 @@ const CitasVista = {
             odontologoId: c?.odontologoId ?? datos.odontologoId ?? App.odontologos[0]?.id,
             fecha: c?.fecha ?? (datos.fecha && datos.fecha >= App.hoy ? datos.fecha : App.hoy),
             hora: c?.hora ?? datos.hora ?? null,
+            duracion: c?.duracionMinutos ?? datos.duracion ?? 30,
             motivo: c?.motivo ?? datos.motivo ?? '',
             notas: c?.notasRecepcion ?? datos.notas ?? '',
         };
@@ -244,7 +256,14 @@ const CitasVista = {
                     <div id="cita-paciente"></div>
                     <span class="campo__error" data-error="pacienteId"></span>
                 </div>
-                <div class="fila-campos">
+                <label class="campo">
+                    <span class="campo__etiqueta">Motivo de la consulta <b class="req">*</b></span>
+                    <input type="text" name="motivo" maxlength="255" placeholder="Ej. Limpieza dental" required>
+                    <div class="sugerencias">${MOTIVOS_FRECUENTES.map(m => `<button type="button" class="chip" data-motivo="${esc(m.nombre)}"
+                        data-minutos="${m.minutos}">${esc(m.nombre)} · ${Fecha.duracion(m.minutos)}</button>`).join('')}</div>
+                    <span class="campo__error" data-error="motivo"></span>
+                </label>
+                <div class="fila-campos fila-campos--3">
                     <label class="campo">
                         <span class="campo__etiqueta">Odontólogo <b class="req">*</b></span>
                         <select name="odontologoId">${App.odontologos.map(o =>
@@ -255,23 +274,23 @@ const CitasVista = {
                         <input type="date" name="fecha" min="${App.hoy}" required>
                         <span class="campo__error" data-error="fecha"></span>
                     </label>
+                    <label class="campo">
+                        <span class="campo__etiqueta">Duración <b class="req">*</b></span>
+                        <select name="duracionMinutos">${DURACIONES.map(d => `<option value="${d}">${Fecha.duracion(d)}</option>`).join('')}</select>
+                        <span class="campo__error" data-error="duracionMinutos"></span>
+                    </label>
                 </div>
                 <div class="campo">
                     <span class="campo__etiqueta">Hora <b class="req">*</b> <span class="campo__ayuda" id="cita-hora-ayuda"></span></span>
                     <div id="cita-horas" class="selector-horas"></div>
                     <span class="campo__error" data-error="hora"></span>
+                    <span class="campo__ayuda">Verde: cabe completa · Rojo: ocupado · Ámbar: libre, pero no alcanza para la duración elegida</span>
                 </div>
-                <label class="campo">
-                    <span class="campo__etiqueta">Motivo de la consulta <b class="req">*</b></span>
-                    <input type="text" name="motivo" maxlength="255" placeholder="Ej. Limpieza dental" required>
-                    <div class="sugerencias">${MOTIVOS_FRECUENTES.map(m => `<button type="button" class="chip" data-motivo="${esc(m)}">${esc(m)}</button>`).join('')}</div>
-                    <span class="campo__error" data-error="motivo"></span>
-                </label>
                 <label class="campo">
                     <span class="campo__etiqueta">Notas de recepción</span>
                     <textarea name="notasRecepcion" maxlength="1000" placeholder="Indicaciones, referencias, etc. (opcional)"></textarea>
                 </label>
-                ${c && c.estado === 'Confirmada' ? '<p class="aviso aviso--info">Si cambias la fecha, hora u odontólogo, la cita regresará a <b>Programada</b> y deberá confirmarse de nuevo.</p>' : ''}
+                ${c && c.estado === 'Confirmada' ? '<p class="aviso aviso--info">Si cambias la fecha, hora, duración u odontólogo, la cita regresará a <b>Programada</b> y deberá confirmarse de nuevo.</p>' : ''}
                 <div class="acciones-form">
                     <button type="button" class="btn btn--borde" data-cerrar>Cancelar</button>
                     <button type="submit" class="btn btn--primario">${icono('check')}${c ? 'Guardar cambios' : 'Agendar cita'}</button>
@@ -281,11 +300,16 @@ const CitasVista = {
         const form = cuerpo.querySelector('#form-cita');
         form.odontologoId.value = estado.odontologoId;
         form.fecha.value = estado.fecha;
+        if (!DURACIONES.includes(estado.duracion)) {
+            form.duracionMinutos.insertAdjacentHTML('beforeend', `<option value="${estado.duracion}">${Fecha.duracion(estado.duracion)}</option>`);
+        }
+        form.duracionMinutos.value = estado.duracion;
         form.motivo.value = estado.motivo;
         form.notasRecepcion.value = estado.notas;
 
         const borrador = () => ({
             fecha: form.fecha.value, hora: estado.hora, odontologoId: Number(form.odontologoId.value),
+            duracion: Number(form.duracionMinutos.value),
             paciente: estado.paciente, motivo: form.motivo.value, notas: form.notasRecepcion.value,
         });
 
@@ -295,7 +319,14 @@ const CitasVista = {
                 this.abrirFormulario(c ? { cita: { ...c, ...aCita(borrador(), nuevo) } } : { ...borrador(), paciente: nuevo })),
         });
 
-        cuerpo.querySelectorAll('[data-motivo]').forEach(b => b.onclick = () => { form.motivo.value = b.dataset.motivo; limpiarError('motivo'); });
+        cuerpo.querySelectorAll('[data-motivo]').forEach(b => b.onclick = () => {
+            form.motivo.value = b.dataset.motivo;
+            limpiarError('motivo');
+            if (form.duracionMinutos.value !== b.dataset.minutos) {
+                form.duracionMinutos.value = b.dataset.minutos;
+                cargarHoras();
+            }
+        });
 
         const limpiarError = campo => {
             const el = cuerpo.querySelector(`[data-error=${campo}]`);
@@ -322,20 +353,31 @@ const CitasVista = {
             }
             cont.innerHTML = '<div class="cargando" style="grid-column:1/-1"></div>';
             try {
-                const disp = await Api.disponibilidad(fecha, form.odontologoId.value, estado.id);
+                const duracion = Number(form.duracionMinutos.value);
+                const disp = await Api.disponibilidad(fecha, form.odontologoId.value, estado.id, duracion);
                 if (!disp.abierto) {
                     form.fecha.classList.add('invalido');
                     cont.innerHTML = `<p class="aviso aviso--alerta" style="grid-column:1/-1">${esc(disp.mensaje)}</p>`;
                     ayuda.textContent = '';
                     return;
                 }
-                ayuda.textContent = `· ${disp.disponibles} disponible(s)`;
                 if (!disp.espacios.some(e => e.estado === 'DISPONIBLE' && e.hora === estado.hora)) estado.hora = null;
+                const pintarAyuda = () => {
+                    const fin = estado.hora ? sumarMinutos(estado.hora, duracion) : null;
+                    ayuda.textContent = `· ${disp.disponibles} disponible(s) para ${Fecha.duracion(duracion)}`
+                        + (fin ? ` · la cita sería de ${Fecha.hora12(estado.hora)} a ${Fecha.hora12(fin)}` : '');
+                };
+                pintarAyuda();
                 cont.innerHTML = disp.disponibles === 0
                     ? '<p class="aviso aviso--alerta" style="grid-column:1/-1">No quedan horarios libres este día. Elige otra fecha.</p>'
                     : disp.espacios.map(e => {
-                        const clase = e.estado === 'OCUPADO' ? 'ocupada' : e.estado === 'PASADO' ? 'pasada' : (e.hora === estado.hora ? 'elegida' : '');
-                        const titulo = e.estado === 'OCUPADO' ? `Ocupado: ${e.pacienteNombre}` : e.estado === 'PASADO' ? 'Hora pasada' : 'Disponible';
+                        const clase = { OCUPADO: 'ocupada', PASADO: 'pasada', INSUFICIENTE: 'corta' }[e.estado]
+                            ?? (e.hora === estado.hora ? 'elegida' : '');
+                        const titulo = {
+                            OCUPADO: `Ocupado: ${e.pacienteNombre} (${e.citaInicio}–${e.citaFin})`,
+                            PASADO: 'Hora pasada',
+                            INSUFICIENTE: `Libre, pero ${Fecha.duracion(duracion)} no alcanzan antes de la siguiente cita o del cierre`,
+                        }[e.estado] ?? 'Disponible';
                         return `<button type="button" class="${clase}" data-hora="${e.hora}" ${e.estado !== 'DISPONIBLE' ? 'disabled' : ''}
                                     title="${esc(titulo)}">${e.hora}</button>`;
                     }).join('');
@@ -344,6 +386,7 @@ const CitasVista = {
                     cont.querySelectorAll('.elegida').forEach(x => x.classList.remove('elegida'));
                     b.classList.add('elegida');
                     limpiarError('hora');
+                    pintarAyuda();
                 });
             } catch (err) {
                 cont.innerHTML = `<p class="aviso aviso--alerta" style="grid-column:1/-1">${esc(err.message)}</p>`;
@@ -351,6 +394,7 @@ const CitasVista = {
         };
         form.fecha.onchange = cargarHoras;
         form.odontologoId.onchange = cargarHoras;
+        form.duracionMinutos.onchange = cargarHoras;
         form.motivo.oninput = () => limpiarError('motivo');
         cargarHoras();
 
@@ -371,6 +415,7 @@ const CitasVista = {
                 odontologoId: Number(form.odontologoId.value),
                 fecha: form.fecha.value,
                 hora: estado.hora,
+                duracionMinutos: Number(form.duracionMinutos.value),
                 motivo: form.motivo.value.trim(),
                 notasRecepcion: form.notasRecepcion.value.trim(),
             };
@@ -398,7 +443,7 @@ const CitasVista = {
 /** Combina un borrador del formulario con un paciente recién creado, en forma de cita para reabrir la edición. */
 function aCita(b, paciente) {
     return {
-        fecha: b.fecha, hora: b.hora, odontologoId: b.odontologoId, motivo: b.motivo, notasRecepcion: b.notas,
+        fecha: b.fecha, hora: b.hora, odontologoId: b.odontologoId, duracionMinutos: b.duracion, motivo: b.motivo, notasRecepcion: b.notas,
         pacienteId: paciente.id, pacienteNombre: paciente.nombreCompleto, pacienteTelefono: paciente.telefono,
     };
 }
