@@ -89,6 +89,20 @@ CREATE TABLE inventario (
     fecha_ultima_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+-- Entradas y salidas de material: quién las registró y en qué tratamiento se usó (RF-10).
+CREATE TABLE movimientos_inventario (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    inventario_id INT NOT NULL,
+    usuario_id INT,
+    tratamiento_id INT,
+    tipo ENUM('Entrada', 'Salida') NOT NULL,
+    cantidad INT NOT NULL,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (inventario_id) REFERENCES inventario(id) ON DELETE CASCADE,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,
+    FOREIGN KEY (tratamiento_id) REFERENCES tratamientos(id) ON DELETE SET NULL
+);
+
 -- Contraseñas iniciales de demostración: el backend las cifra con BCrypt en el primer inicio de sesión.
 INSERT INTO usuarios (nombre_completo, rol, email, password) VALUES
 ('Dra. Ana López', 'Odontologo', 'ana@clinica.com', '12345'),
