@@ -18,8 +18,10 @@ Laptop (navegador) ──HTTP :8080──▶ VM de Azure (Spring Boot) ──MyS
 ## Paso 1. Grupo de recursos
 
 1. En el buscador del portal escribe **Grupos de recursos** → **Crear**.
-2. Suscripción: **Azure for Students**. Nombre: `rg-gdi`. Región: la misma que usarás en todo (por ejemplo
-   **East US 2** o **Central US**). Si una región marca error de "política", elige otra de la lista.
+2. Suscripción: **Azure for Students**. Nombre: `rg-gdi`. Región: **Chile Central**, o la que permita la suscripción.
+   La suscripción de estudiante del IPN solo deja crear recursos en algunas regiones. Para ver la lista: buscador →
+   **Directiva** → **Asignaciones** → *Allowed resource deployment regions* → **Parámetros**. Si al crear sale
+   *"The template deployment failed because of policy violation"*, la región no está permitida.
 3. **Revisar y crear** → **Crear**.
 
 ## Paso 2. Servidor de base de datos MySQL
@@ -29,7 +31,7 @@ Laptop (navegador) ──HTTP :8080──▶ VM de Azure (Spring Boot) ──MyS
 3. Pestaña **Aspectos básicos**:
    - Grupo de recursos: `rg-gdi`.
    - Nombre del servidor: `gdi-mysql-omegatech`. Debe ser único en todo Azure; si está ocupado, agrega un número.
-   - Región: la misma del grupo.
+   - Región: **Chile Central**, o la región permitida (la misma para MySQL y la VM).
    - Versión de MySQL: **8.0**.
    - Tipo de carga de trabajo: **Para proyectos de desarrollo o pasatiempos**.
    - Proceso y almacenamiento → **Configurar servidor**:
@@ -55,7 +57,7 @@ Laptop (navegador) ──HTTP :8080──▶ VM de Azure (Spring Boot) ──MyS
 
 1. Buscador → **Máquinas virtuales** → **Crear** → **Máquina virtual de Azure**.
 2. **Aspectos básicos**:
-   - Grupo de recursos: `rg-gdi`. Nombre: `vm-gdi-backend`. Región: la misma.
+   - Grupo de recursos: `rg-gdi`. Nombre: `vm-gdi-backend`. Región: la misma que el servidor MySQL (**Chile Central**).
    - Imagen: **Ubuntu Server 24.04 LTS – x64 Gen2**.
    - Tamaño: **Standard_B1s** (1 vCPU, 1 GiB). Si no aparece, usa **Standard_B2ats_v2** o **B1ms**.
    - Tipo de autenticación: **Contraseña**. Usuario: `azureuser`, más una contraseña fuerte.
@@ -66,7 +68,7 @@ Laptop (navegador) ──HTTP :8080──▶ VM de Azure (Spring Boot) ──MyS
    - Puerto de destino `8080`, protocolo **TCP**, acción **Permitir**, nombre `Backend-8080`.
 5. Recomendado: en **Información general**, da clic en la **IP pública** → **Configuración**:
    - En **Etiqueta de nombre DNS** escribe `gdi-clinica-omegatech` y guarda.
-   - Así la dirección será fija, por ejemplo `gdi-clinica-omegatech.eastus2.cloudapp.azure.com`, aunque se apague
+   - Así la dirección será fija, por ejemplo `gdi-clinica-omegatech.chilecentral.cloudapp.azure.com`, aunque se apague
      la VM.
 
 ## Paso 4. Entrar a la máquina virtual
@@ -118,7 +120,7 @@ Para comprobarlo, abre esta dirección en el navegador. Debe mostrar un JSON con
 2. Edita `js/config.js` y pon la IP o el nombre DNS de la VM:
 
    ```js
-   window.GDI_API_URL = 'http://gdi-clinica-omegatech.eastus2.cloudapp.azure.com:8080/api';
+   window.GDI_API_URL = 'http://gdi-clinica-omegatech.chilecentral.cloudapp.azure.com:8080/api';
    ```
 
 3. Abre `index.html` con **Live Server** (o con doble clic). Entra con `recepcion@clinica.com` / `12345`.
@@ -141,4 +143,5 @@ Cada integrante hace lo mismo en su laptop: todos usan la misma base de datos en
 | "No hay conexión con MySQL" en el script | En el servidor MySQL → **Redes**, verifica la casilla de servicios de Azure o agrega la IP pública de la VM. |
 | La página dice "No hay conexión con el servidor" | Falta la regla del puerto **8080** (paso 3.4), la VM está apagada o `config.js` tiene otra IP. |
 | La IP de la VM cambió | Usa la etiqueta DNS del paso 3.5, o actualiza `config.js` con la IP nueva. |
-| Error de región o de tamaño al crear | La suscripción de estudiante limita regiones y tamaños: prueba otra región o el tamaño sugerido. |
+| *"policy violation"* al crear | La región no está permitida para Azure for Students: usa **Chile Central** u otra de la lista de la directiva. |
+| No aparece el tamaño B1s o B1ms | Esa región no lo ofrece: elige el tamaño más barato disponible (B2ats_v2, B1ms). |
