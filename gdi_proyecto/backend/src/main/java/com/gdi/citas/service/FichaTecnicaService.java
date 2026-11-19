@@ -7,6 +7,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.gdi.citas.config.Bitacora;
 import com.gdi.citas.dto.FichaTecnicaDtos.FichaTecnicaRequest;
 import com.gdi.citas.dto.FichaTecnicaDtos.FichaTecnicaResponse;
 import com.gdi.citas.exception.RecursoNoEncontradoException;
@@ -51,19 +52,26 @@ public class FichaTecnicaService {
     public FichaTecnicaResponse crear(FichaTecnicaRequest req) {
         FichaTecnica f = new FichaTecnica();
         aplicar(f, req);
-        return FichaTecnicaResponse.de(fichaRepository.save(f));
+        fichaRepository.save(f);
+        Bitacora.anotar("Ficha técnica #{} creada: {} · {} · piezas {} · entrega {}", f.getId(),
+                f.getPaciente().getNombreCompleto(), f.getTipoTrabajo(), f.getPiezas(), f.getFechaEntrega());
+        return FichaTecnicaResponse.de(f);
     }
 
     @Transactional
     public FichaTecnicaResponse actualizar(Integer id, FichaTecnicaRequest req) {
         FichaTecnica f = buscar(id);
         aplicar(f, req);
+        Bitacora.anotar("Ficha técnica #{} actualizada: {} · {} · entrega {}", id, f.getPaciente().getNombreCompleto(),
+                f.getTipoTrabajo(), f.getFechaEntrega());
         return FichaTecnicaResponse.de(f);
     }
 
     @Transactional
     public void eliminar(Integer id) {
-        fichaRepository.delete(buscar(id));
+        FichaTecnica f = buscar(id);
+        fichaRepository.delete(f);
+        Bitacora.anotar("Ficha técnica #{} de {} eliminada", id, f.getPaciente().getNombreCompleto());
     }
 
     private void aplicar(FichaTecnica f, FichaTecnicaRequest req) {

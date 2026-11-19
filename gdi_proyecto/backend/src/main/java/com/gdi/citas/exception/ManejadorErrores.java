@@ -4,8 +4,6 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -15,13 +13,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import com.gdi.citas.config.Bitacora;
 import com.gdi.citas.dto.ErrorResponse;
 
 /** Respuestas de error uniformes en JSON para toda la API. */
 @RestControllerAdvice
 public class ManejadorErrores {
-
-    private static final Logger log = LoggerFactory.getLogger(ManejadorErrores.class);
 
     @ExceptionHandler(RecursoNoEncontradoException.class)
     ResponseEntity<ErrorResponse> noEncontrado(RecursoNoEncontradoException e) {
@@ -30,7 +27,6 @@ public class ManejadorErrores {
 
     @ExceptionHandler(ReglaNegocioException.class)
     ResponseEntity<ErrorResponse> reglaNegocio(ReglaNegocioException e) {
-        log.warn("Rechazado por regla de negocio ({}): {}", e.getStatus().value(), e.getMessage());
         return respuesta(e.getStatus(), e.getMessage(), null);
     }
 
@@ -55,6 +51,7 @@ public class ManejadorErrores {
     }
 
     private ResponseEntity<ErrorResponse> respuesta(HttpStatus status, String mensaje, Map<String, String> campos) {
+        Bitacora.anotar("Motivo: {}", campos == null || campos.size() < 2 ? mensaje : campos);
         return ResponseEntity.status(status)
                 .body(new ErrorResponse(Instant.now(), status.value(), status.getReasonPhrase(), mensaje, campos));
     }

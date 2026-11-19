@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.gdi.citas.config.Bitacora;
 import com.gdi.citas.dto.EstudioDtos.EstudioResponse;
 import com.gdi.citas.exception.RecursoNoEncontradoException;
 import com.gdi.citas.exception.ReglaNegocioException;
@@ -64,6 +65,8 @@ public class EstudioService {
         }
         e.setFecha(LocalDateTime.now(clock).truncatedTo(ChronoUnit.MINUTES));
         estudioRepository.save(e);
+        Bitacora.anotar("{} #{} subida para {}: {} ({} KB)", e.getTipo(), e.getId(), e.getPaciente().getNombreCompleto(),
+                e.getNombreArchivo(), e.getTamano() / 1024);
         return new EstudioResponse(e.getId(), e.getTipo(), e.getDescripcion(), e.getNombreArchivo(), e.getTipoMime(),
                 e.getTamano(), e.getFecha());
     }
@@ -78,7 +81,9 @@ public class EstudioService {
 
     @Transactional
     public void eliminar(Integer id) {
-        estudioRepository.delete(estudioRepository.findById(id)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Estudio no encontrado: " + id)));
+        Estudio e = estudioRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Estudio no encontrado: " + id));
+        estudioRepository.delete(e);
+        Bitacora.anotar("{} #{} de {} eliminada ({})", e.getTipo(), id, e.getPaciente().getNombreCompleto(), e.getNombreArchivo());
     }
 }

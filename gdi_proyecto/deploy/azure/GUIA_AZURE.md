@@ -99,12 +99,45 @@ window.GDI_API_URL = 'http://gdi-clinica-omegatech.chilecentral.cloudapp.azure.c
 Abre `index.html` con **Live Server** y entra con `recepcion@clinica.com` / `12345`. Cada integrante hace lo mismo
 en su laptop; **no hay que registrar la IP de nadie**.
 
+## Paso 6. Registro legible que se abre solo (backend y MySQL)
+
+Se hace **una sola vez en cada VM** (primero `git pull` dentro de `gdi_proyecto/gdi_proyecto`):
+
+```bash
+sudo bash deploy/azure/activar-registro.sh
+```
+
+Desde entonces, **cada vez que entres por SSH** se abre el registro en vivo, en español y con colores. Con
+**Ctrl + C** sales a la terminal normal y con `sudo gdi-registro` lo vuelves a abrir (`sudo gdi-registro cambios`
+oculta las consultas de solo lectura).
+
+**VM del backend:** una línea por petición y, debajo, qué cambió o por qué se rechazó.
+
+```
+15:26:57 SESION   | Inicio de sesión | POST /api/auth/login | 200 OK | 358 ms | desde 187.190.186.64
+           -> Entró Recepción (Recepcionista)
+15:26:57 CONSULTA | Horarios disponibles del día | GET /api/agenda/disponibilidad?fecha=2026-11-20&odontologoId=1 | 200 OK | 82 ms | desde 187.190.186.64
+15:26:57 RECHAZO  | Agendar cita | POST /api/citas | 409 choca con otra cita | 78 ms | desde 187.190.186.64
+           -> Motivo: El horario de 12:00 a 12:30 se empalma con la cita de Luis Hernández (12:00 a 13:30). …
+15:26:57 CAMBIO   | Modificar diente del odontograma | PUT /api/pacientes/1/odontograma/16 | 200 OK | 104 ms | desde 187.190.186.64
+           -> Odontograma de Juan Pérez · diente 16: Restaurado (O) · Caries (M) -> Endodoncia · Caries (O)
+```
+
+**VM de MySQL:** el SQL que manda el backend, traducido.
+
+```
+15:26:47 CONEXIÓN   usuario gdi desde 68.211.137.169 a la base gdi_db (SSL/TLS)
+15:26:57 CONSULTA   lee odontogramas  donde expediente_id=1 and numero_diente=16
+15:26:57 NUEVO      registro en odontograma_historial: estado_anterior='Sano', estado_nuevo='Endodoncia', numero_diente=16, …
+15:26:57 MODIFICADO odontogramas donde id=1: estado_diente='Endodoncia', superficies='O:C'
+```
+
 ## Mantenimiento
 
 | Qué | Dónde | Cómo |
 |---|---|---|
 | Subir cambios del backend | VM backend | `cd gdi_proyecto/gdi_proyecto && sudo bash deploy/azure/actualizar-backend.sh` |
-| Ver en vivo lo que hace el backend (cada petición, citas agendadas, rechazos) | VM backend | `sudo journalctl -u gdi-backend -f` (salir con Ctrl + C) |
+| Ver en vivo lo que pasa (se abre solo al entrar por SSH) | Cada VM | `sudo gdi-registro` · solo cambios: `sudo gdi-registro cambios` (salir con Ctrl + C) |
 | Estado / errores del backend | VM backend | `sudo systemctl status gdi-backend` · `sudo journalctl -u gdi-backend -n 80` |
 | Entrar a la base de datos | VM MySQL | `sudo mysql gdi_db` |
 | Respaldo manual | VM MySQL | `sudo /etc/cron.daily/gdi-respaldo` (queda en `/var/backups/gdi`) |
