@@ -1,4 +1,4 @@
-# GDI – Gestión Dental Integral · Módulo de Citas
+# GDI – Gestión Dental Integral
 
 Sistema web para **Clínica Imagen** con arquitectura de 3 capas (RNF-07):
 
@@ -9,8 +9,15 @@ Sistema web para **Clínica Imagen** con arquitectura de 3 capas (RNF-07):
 | Datos | MySQL 8 | `init.sql` |
 
 Requerimientos cubiertos en este avance: **RF-06** (registrar y consultar citas), **RF-07** (disponibilidad de la
-agenda), **RF-08** (confirmación y recordatorio por WhatsApp) y una base de **RF-11/RF-12** (inicio de sesión y
-opciones según el rol).
+agenda), **RF-08** (confirmación y recordatorio por WhatsApp), una base de **RF-11/RF-12** (inicio de sesión y
+opciones según el rol) y el expediente clínico con **odontograma**, **radiografías** y **módulo técnico** (fichas de
+coronas, puentes y prótesis).
+
+## Despliegue en la nube (Azure)
+
+La interfaz corre en la laptop; el backend en una **máquina virtual de Azure** y los datos en **Azure Database for
+MySQL (servidor flexible)**. Paso a paso en [`deploy/azure/GUIA_AZURE.md`](deploy/azure/GUIA_AZURE.md); el backend se
+instala en la VM con `sudo bash deploy/azure/instalar-backend.sh` y la laptop apunta a él en `frontend/js/config.js`.
 
 ## Cómo ejecutarlo
 
@@ -34,6 +41,18 @@ Usuarios de demostración (contraseña `12345`; se cifra con BCrypt en el primer
 
 Sin Docker: levanta MySQL en `localhost:3306` (usuario/contraseña `root`), ejecuta `init.sql`, corre
 `./mvnw spring-boot:run` dentro de `backend/` y abre `frontend/index.html` (o con Live Server).
+
+## Módulos
+
+- **Agenda y citas:** el formulario usa listas (procedimiento y hora libre), sin botones por cada opción.
+- **Urgencias (sobrecupo):** botón *Urgencia* en la agenda. Se registra a la hora en que llega el paciente (pasos de
+  5 min, de 10 a 60 min de duración) dentro del horario de atención, aunque el odontólogo tenga cita: el sistema avisa
+  con quién se encima para que ese paciente espere unos minutos. Las urgencias no le quitan el espacio a nadie.
+- **Expediente clínico** (Pacientes → *Expediente*): antecedentes y alergias, **odontograma** interactivo con
+  numeración FDI y 5 caras por diente (caries, restauración, fractura, corona, endodoncia, implante, bracket, por
+  extraer, ausente) y **radiografías / estudios** (JPG, PNG o PDF de hasta 10 MB).
+- **Módulo técnico:** fichas de coronas, puentes, carillas y prótesis con piezas, material, color VITA, medidas en mm,
+  terminación, laboratorio y fechas de toma y de entrega. Las llena el odontólogo; recepción solo las consulta.
 
 ## Reglas de negocio de la agenda
 
@@ -75,12 +94,17 @@ para la duración elegida.
 | GET | `/api/agenda/configuracion` | Horario de la clínica y hora actual del servidor |
 | GET / POST / PUT | `/api/pacientes`, `/api/pacientes/{id}` | Búsqueda, alta y edición de pacientes |
 | GET | `/api/usuarios/odontologos` | Lista de odontólogos |
+| GET / PUT | `/api/pacientes/{id}/expediente` | Expediente (antecedentes, alergias y odontograma) |
+| PUT | `/api/pacientes/{id}/odontograma/{diente}` | Estado de una pieza `{ "estado": "Caries", "superficies": ["O","M"] }` |
+| GET / POST | `/api/pacientes/{id}/estudios` | Lista y sube radiografías (multipart: `archivo`, `tipo`, `descripcion`) |
+| GET / DELETE | `/api/estudios/{id}/archivo`, `/api/estudios/{id}` | Ver o eliminar un estudio |
+| GET / POST / PUT / DELETE | `/api/fichas-tecnicas`, `/api/fichas-tecnicas/{id}` | Módulo técnico |
 | POST | `/api/auth/login` | Inicio de sesión |
 
 Cuerpo de `POST/PUT /api/citas`:
 
 ```json
-{ "pacienteId": 1, "odontologoId": 1, "fecha": "2026-10-20", "hora": "10:30", "duracionMinutos": 60, "motivo": "Limpieza dental", "notasRecepcion": "" }
+{ "pacienteId": 1, "odontologoId": 1, "fecha": "2026-10-20", "hora": "10:30", "duracionMinutos": 60, "motivo": "Limpieza dental", "notasRecepcion": "", "urgente": false }
 ```
 
 Los errores regresan JSON uniforme con el código HTTP correspondiente (400 datos inválidos, 404 no encontrado,
