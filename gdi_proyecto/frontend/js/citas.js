@@ -22,9 +22,9 @@ const OTRO = '__otro';
 const Procedimientos = {
     opciones(urgencia) {
         return urgencia
-            ? `<optgroup label="Urgencias">${URGENCIAS.map(([n, m]) => `<option value="${esc(n)}">${esc(n)} · ${Fecha.duracion(m)}</option>`).join('')}</optgroup>`
+            ? `<optgroup label="Urgencias">${URGENCIAS.map(([n, m]) => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</optgroup>`
             : PROCEDIMIENTOS.map(([grupo, lista]) => `<optgroup label="${esc(grupo)}">${lista.map(([n, m]) =>
-                `<option value="${esc(n)}">${esc(n)} · ${Fecha.duracion(m)}</option>`).join('')}</optgroup>`).join('');
+                `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</optgroup>`).join('');
     },
     lista(urgencia) { return urgencia ? URGENCIAS : PROCEDIMIENTOS.flatMap(([, l]) => l); },
     minutos(nombre, urgencia) { return this.lista(urgencia).find(([n]) => n === nombre)?.[1]; },
