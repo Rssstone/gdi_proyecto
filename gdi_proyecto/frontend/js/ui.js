@@ -87,12 +87,13 @@ function toast(mensaje, tipo = 'ok') {
 /* ---------- Ventana modal ---------- */
 const Modal = {
     abierto: false,
-    abrir(titulo, html, { chico = false } = {}) {
+    abrir(titulo, html, { chico = false, grande = false } = {}) {
         const modal = document.getElementById('modal');
         document.getElementById('modal-titulo').textContent = titulo;
         const cuerpo = document.getElementById('modal-cuerpo');
         cuerpo.innerHTML = html;
         modal.querySelector('.modal__caja').classList.toggle('modal__caja--chica', chico);
+        modal.querySelector('.modal__caja').classList.toggle('modal__caja--grande', grande);
         modal.hidden = false;
         this.abierto = true;
         pintarIconos(modal);

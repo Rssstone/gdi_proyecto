@@ -15,14 +15,19 @@ public record CitaRequest(
         @NotNull(message = "Selecciona un odontólogo") Integer odontologoId,
         @NotNull(message = "La fecha es obligatoria") LocalDate fecha,
         @NotNull(message = "La hora es obligatoria") @JsonFormat(pattern = "HH:mm") LocalTime hora,
-        @Min(value = 30, message = "La duración mínima es de 30 minutos")
+        @Min(value = 10, message = "La duración mínima es de 10 minutos")
         @Max(value = 240, message = "La duración máxima es de 4 horas") Integer duracionMinutos,
         @NotNull(message = "El motivo es obligatorio")
         @Size(min = 3, max = 255, message = "El motivo debe tener entre 3 y 255 caracteres") String motivo,
-        @Size(max = 1000, message = "Las notas no pueden exceder 1000 caracteres") String notasRecepcion) {
+        @Size(max = 1000, message = "Las notas no pueden exceder 1000 caracteres") String notasRecepcion,
+        Boolean urgente) {
 
     /** Si no se indica, la cita dura un bloque (30 minutos). */
     public int duracionOPredeterminada() {
         return duracionMinutos == null ? 30 : duracionMinutos;
+    }
+
+    public boolean esUrgente() {
+        return Boolean.TRUE.equals(urgente);
     }
 }

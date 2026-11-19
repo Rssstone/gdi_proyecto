@@ -47,13 +47,14 @@
             <span class="topbar__emblema"><img src="img/logo.png" alt="Clínica Imagen"></span>
             <div>
                 <strong>Clínica Imagen</strong>
-                <small>GDI · Módulo de Citas</small>
+                <small>GDI · Gestión Dental Integral</small>
             </div>
         </div>
         <nav class="tabs" id="tabs">
             <button class="tab activo" data-vista="agenda" data-icon="calendario">Agenda</button>
             <button class="tab" data-vista="citas" data-icon="lista">Citas</button>
             <button class="tab" data-vista="pacientes" data-icon="usuarios">Pacientes</button>
+            <button class="tab" data-vista="tecnico" data-icon="diente">Módulo técnico</button>
         </nav>
         <div class="topbar__derecha">
             <div class="reloj" id="reloj" title="Hora de la clínica"></div>
@@ -102,7 +103,10 @@
                             <h2 id="dia-titulo"></h2>
                             <p id="dia-mensaje" class="texto-suave"></p>
                         </div>
-                        <button class="btn btn--primario" id="btn-nueva-cita" data-icon="mas" data-rol="gestion">Nueva cita</button>
+                        <div class="dia__acciones">
+                            <button class="btn btn--urgencia" id="btn-urgencia" data-icon="alerta" data-rol="gestion">Urgencia</button>
+                            <button class="btn btn--primario" id="btn-nueva-cita" data-icon="mas" data-rol="gestion">Nueva cita</button>
+                        </div>
                     </div>
                     <ul class="leyenda leyenda--horas">
                         <li><i class="punto punto--libre"></i>Disponible</li>
@@ -110,6 +114,7 @@
                         <li><i class="punto punto--completada"></i>Atendida</li>
                         <li><i class="punto punto--inasistencia"></i>No asistió</li>
                         <li><i class="punto punto--pasado"></i>Hora pasada</li>
+                        <li><i class="punto punto--urgencia"></i>Urgencia (sobrecupo)</li>
                     </ul>
                     <div id="horarios" class="horarios"></div>
                 </div>
@@ -157,6 +162,24 @@
                 <div id="tabla-pacientes"></div>
             </div>
         </section>
+
+        <!-- Módulo técnico: fichas de coronas, puentes y prótesis -->
+        <section id="vista-tecnico" class="vista" hidden>
+            <div class="panel">
+                <div class="barra-filtros">
+                    <label class="buscador">
+                        <span data-icon="buscar"></span>
+                        <input type="search" id="tecnico-buscar" placeholder="Buscar paciente, pieza o material…">
+                    </label>
+                    <div class="segmentos" id="tecnico-filtro">
+                        <button data-filtro="pendientes" class="activo">Por entregar</button>
+                        <button data-filtro="todas">Todas</button>
+                    </div>
+                    <button class="btn btn--primario" id="btn-nueva-ficha" data-icon="mas" data-rol="clinico">Nueva ficha técnica</button>
+                </div>
+                <div id="tabla-tecnico"></div>
+            </div>
+        </section>
     </main>
 </div>
 
@@ -174,11 +197,14 @@
 
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
+<script src="js/config.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/api.js"></script>
 <script src="js/agenda.js"></script>
 <script src="js/citas.js"></script>
 <script src="js/pacientes.js"></script>
+<script src="js/expediente.js"></script>
+<script src="js/tecnico.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

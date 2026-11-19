@@ -10,6 +10,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.gdi.citas.dto.ErrorResponse;
@@ -41,6 +42,11 @@ public class ManejadorErrores {
     ResponseEntity<ErrorResponse> formato(Exception e) {
         return respuesta(HttpStatus.BAD_REQUEST,
                 "Formato de datos no válido (fechas: AAAA-MM-DD, horas: HH:mm)", null);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ResponseEntity<ErrorResponse> archivoGrande(MaxUploadSizeExceededException e) {
+        return respuesta(HttpStatus.CONTENT_TOO_LARGE, "El archivo pesa más de 10 MB.", null);
     }
 
     private ResponseEntity<ErrorResponse> respuesta(HttpStatus status, String mensaje, Map<String, String> campos) {

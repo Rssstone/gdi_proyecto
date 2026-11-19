@@ -17,6 +17,8 @@
     --ambar-100: #fff3dc;
     --morado-600: #6d4ad1;
     --morado-100: #eee9fc;
+    --urgencia-600: #e8590c;
+    --urgencia-100: #fff0e6;
     --gris-900: #1f2937;
     --gris-700: #4b5563;
     --gris-500: #8a94a6;
@@ -90,7 +92,7 @@ svg.ic { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none
 .campo__etiqueta { font-size: 13px; font-weight: 700; color: var(--gris-700); }
 .campo__ayuda { font-size: 12px; color: var(--gris-500); }
 .campo__error { font-size: 12px; color: var(--rojo-600); font-weight: 600; }
-input[type=text], input[type=email], input[type=password], input[type=date], input[type=tel], input[type=search], select, textarea {
+input[type=text], input[type=email], input[type=password], input[type=date], input[type=time], input[type=number], input[type=file], input[type=tel], input[type=search], select, textarea {
     width: 100%; border: 1px solid var(--gris-300); border-radius: var(--radio-chico);
     padding: 10px 12px; background: var(--blanco); outline: none; transition: border-color .15s, box-shadow .15s;
 }
@@ -215,6 +217,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--azul-600); box-s
 .punto--completada { background: var(--morado-100); border: 2px solid var(--morado-600); }
 .punto--inasistencia { background: var(--ambar-100); border: 2px solid var(--ambar-600); }
 .punto--pasado { background: var(--gris-200); border: 2px solid var(--gris-300); }
+.punto--urgencia { background: var(--urgencia-100); border: 2px solid var(--urgencia-600); }
 .punto--cerrado { background: repeating-linear-gradient(-45deg, var(--gris-300), var(--gris-300) 2px, var(--blanco) 2px, var(--blanco) 4px); border: 1px solid var(--gris-300); }
 
 .dia__cabecera { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
@@ -294,6 +297,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--azul-600); box-s
     background: var(--blanco); border-radius: 18px; box-shadow: var(--sombra-alta); animation: subir .18s ease;
 }
 .modal__caja--chica { max-width: 440px; }
+.modal__caja--grande { max-width: 1060px; }
 .modal__cabecera { position: sticky; top: 0; background: var(--blanco); z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 10px; }
 .modal__cabecera h3 { font-size: 18px; color: var(--azul-900); }
 .modal__cuerpo { padding: 6px 22px 22px; }
@@ -318,21 +322,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--azul-600); box-s
 .enlace { background: none; border: 0; padding: 0; color: var(--azul-600); font-weight: 700; cursor: pointer; font-size: 13px; }
 .enlace:hover { text-decoration: underline; }
 
-/* Selector de hora dentro del formulario */
-.selector-horas { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; }
-.selector-horas button {
-    border: 1.5px solid var(--verde-500); background: var(--verde-100); color: #3d6b0d; border-radius: 8px;
-    padding: 7px 0; font-weight: 800; font-size: 13px; cursor: pointer;
-}
-.selector-horas button:hover:not(:disabled) { background: #dcefc3; }
-.selector-horas button.elegida, .selector-horas button.elegida:hover { background: var(--azul-600); border-color: var(--azul-600); color: var(--blanco); }
-.selector-horas button.ocupada { background: var(--rojo-100); border-color: #f0b4b4; color: var(--rojo-600); cursor: not-allowed; text-decoration: line-through; }
-.selector-horas button.corta { background: var(--ambar-100); border-color: #f1cf8f; color: var(--ambar-600); cursor: not-allowed; }
-.selector-horas button.pasada { background: var(--gris-100); border-color: var(--gris-200); color: var(--gris-500); cursor: not-allowed; text-decoration: line-through; }
 .aviso { padding: 10px 12px; border-radius: var(--radio-chico); font-size: 13px; font-weight: 600; }
 .aviso--info { background: var(--azul-50); color: var(--azul-700); }
 .aviso--alerta { background: var(--rojo-100); color: var(--rojo-600); }
-.sugerencias { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 
 /* Detalle de cita */
 .detalle { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; margin: 4px 0 18px; }
@@ -386,7 +378,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--azul-600); box-s
     .celda__info { display: none; }
     .celda { min-height: 38px; }
     .dia__cabecera { flex-direction: column; }
-    .dia__cabecera .btn { width: 100%; }
+    .dia__cabecera .btn, .dia__acciones { width: 100%; }
+    .dia__acciones .btn { flex: 1; }
     .horarios { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .barra-filtros .btn { margin-left: 0; width: 100%; }
     .segmentos { width: 100%; }
@@ -402,3 +395,95 @@ input:focus, select:focus, textarea:focus { border-color: var(--azul-600); box-s
     .modal__caja { max-height: 92vh; border-radius: 18px 18px 0 0; }
 }
 .dia__cabecera h2::first-letter, .grupo-fecha td::first-letter { text-transform: uppercase; }
+
+/* ---------- Urgencias (sobrecupo) ---------- */
+.btn--urgencia { background: var(--urgencia-100); color: var(--urgencia-600); border-color: #ffc9a6; }
+.btn--urgencia:hover:not(:disabled) { background: #ffe2cf; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.dia__acciones { display: flex; gap: 8px; }
+.badge--urgencia { background: var(--urgencia-100); color: var(--urgencia-600); }
+.aviso--urgencia { background: var(--urgencia-100); color: #a33d06; display: flex; gap: 8px; align-items: flex-start; }
+.aviso--urgencia svg.ic { margin-top: 1px; }
+.hueco__urgencia {
+    display: flex; align-items: center; gap: 4px; margin-top: 4px; padding: 2px 6px; border-radius: 6px;
+    background: var(--urgencia-100); color: var(--urgencia-600); border: 1px solid #ffc9a6;
+    font-size: 11px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+}
+.hueco__urgencia svg.ic { width: 12px; height: 12px; }
+.hueco__urgencia--atendida { opacity: .65; }
+select:disabled { background: var(--gris-100); color: var(--gris-500); }
+
+/* ---------- Pestañas internas (expediente) ---------- */
+.ficha-paciente { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 12px 14px; border-radius: 14px;
+    background: linear-gradient(135deg, var(--azul-50), var(--verde-100)); margin-bottom: 14px; }
+.ficha-paciente h4 { margin: 0; font-size: 18px; color: var(--azul-900); }
+.ficha-paciente small { color: var(--gris-700); }
+.chip-alerta { display: inline-flex; align-items: center; gap: 6px; background: var(--rojo-100); color: var(--rojo-600);
+    border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800; }
+.chip-alerta svg.ic { width: 14px; height: 14px; }
+.pestanas { margin-bottom: 14px; }
+.vacio--chico { padding: 18px; }
+
+/* ---------- Odontograma ---------- */
+.odontograma { background: var(--blanco); border: 1px solid var(--gris-200); border-radius: 14px; padding: 10px 6px; overflow-x: auto; }
+.odontograma svg { display: block; width: 100%; min-width: 760px; height: auto; user-select: none; }
+.odontograma .diente { cursor: pointer; }
+.odontograma .diente:hover .caja-fondo { fill: var(--azul-50); }
+.odontograma .diente.elegido .caja-fondo { fill: var(--azul-100); stroke: var(--azul-600); stroke-width: 2; }
+.odontograma .cara { fill: var(--blanco); stroke: #7a869a; stroke-width: 1; }
+.odontograma .cara:hover { fill: #e9f0fb; }
+.odontograma .silueta { fill: #fbfbfd; stroke: #9aa5b5; stroke-width: 1.2; }
+.odontograma .num { font-size: 11px; font-weight: 800; fill: var(--gris-700); text-anchor: middle; }
+.odontograma .linea-media { stroke: var(--gris-300); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.odontograma .etiqueta-arcada { font-size: 10px; font-weight: 800; fill: var(--gris-500); letter-spacing: .6px; }
+.leyenda-odontograma { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 2px 0; padding: 0; list-style: none; font-size: 12px; color: var(--gris-700); font-weight: 600; }
+.leyenda-odontograma li { display: flex; align-items: center; gap: 6px; }
+.leyenda-odontograma svg { width: 22px; height: 22px; }
+.odontograma-editor { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; margin-top: 14px; }
+.editor-diente { border: 1px solid var(--gris-200); border-radius: 14px; padding: 14px; background: var(--gris-100); }
+.editor-diente h5 { margin: 0 0 2px; font-size: 16px; color: var(--azul-900); }
+.editor-diente p { margin: 0 0 10px; color: var(--gris-500); font-size: 13px; }
+.caras { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 4px 0 10px; }
+.caras label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; }
+.hallazgos { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.hallazgos li { display: flex; gap: 10px; align-items: baseline; padding: 8px 10px; border-radius: 10px; background: var(--blanco);
+    border: 1px solid var(--gris-200); cursor: pointer; font-size: 13px; }
+.hallazgos li:hover { border-color: var(--azul-600); }
+.hallazgos b { color: var(--azul-900); min-width: 26px; }
+.hallazgos small { color: var(--gris-500); display: block; }
+
+/* ---------- Estudios (radiografías) ---------- */
+.estudios { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.estudio { border: 1px solid var(--gris-200); border-radius: 12px; overflow: hidden; background: var(--blanco); display: flex; flex-direction: column; }
+.estudio__vista { display: grid; place-items: center; height: 130px; background: #111827; color: var(--blanco); text-decoration: none; }
+.estudio__vista img { width: 100%; height: 100%; object-fit: cover; }
+.estudio__vista svg.ic { width: 36px; height: 36px; }
+.estudio__info { padding: 8px 10px; font-size: 12px; display: flex; justify-content: space-between; gap: 6px; align-items: flex-start; }
+.estudio__info strong { display: block; font-size: 13px; }
+.estudio__info small { color: var(--gris-500); }
+.subir-estudio { display: grid; grid-template-columns: 1.4fr 1fr 1.4fr auto; gap: 10px; align-items: end; padding: 12px; border: 1px dashed var(--gris-300);
+    border-radius: 12px; margin-bottom: 14px; background: var(--azul-50); }
+.subir-estudio .campo { margin: 0; }
+
+/* ---------- Módulo técnico ---------- */
+.ficha-tecnica { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 18px; }
+.medidas { display: flex; gap: 6px; flex-wrap: wrap; }
+.medida { background: var(--azul-50); color: var(--azul-700); border-radius: 8px; padding: 3px 8px; font-size: 12px; font-weight: 800; }
+.color-vita { display: inline-flex; align-items: center; gap: 6px; }
+.color-vita i { width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(0, 0, 0, .15); background: #efe3c8; }
+.badge--entrega { background: var(--verde-100); color: var(--verde-600); }
+.badge--entrega-hoy { background: var(--azul-100); color: var(--azul-700); }
+.badge--entrega-vencida { background: var(--ambar-100); color: var(--ambar-600); }
+.fichas { display: grid; gap: 10px; }
+.ficha-card { border: 1px solid var(--gris-200); border-radius: 12px; padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; cursor: pointer; background: var(--blanco); }
+.ficha-card:hover { border-color: var(--azul-600); }
+.ficha-card h5 { margin: 0; font-size: 15px; color: var(--azul-900); }
+.ficha-card small { color: var(--gris-500); }
+.fila-campos--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 760px) {
+    .odontograma-editor, .ficha-tecnica, .subir-estudio, .fila-campos--4 { grid-template-columns: 1fr; }
+}
+.estudio__info small { display: block; }
+.pestanas { max-width: 100%; overflow-x: auto; }
+.pestanas button { white-space: nowrap; }
+input[type=file] { padding: 7px 10px; background: var(--blanco); }

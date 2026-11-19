@@ -19,6 +19,11 @@ const Agenda = {
             fecha: this.dia >= App.hoy ? this.dia : App.hoy,
             odontologoId: this.odontologoId,
         });
+        document.getElementById('btn-urgencia').onclick = () => CitasVista.abrirFormulario({
+            fecha: this.dia > App.hoy ? this.dia : App.hoy,
+            odontologoId: this.odontologoId,
+            urgente: true,
+        });
         this.irAHoy(false);
     },
 
@@ -91,6 +96,7 @@ const Agenda = {
         const pasado = this.dia < App.hoy;
         const botonNueva = document.getElementById('btn-nueva-cita');
         botonNueva.disabled = pasado;
+        document.getElementById('btn-urgencia').disabled = pasado;
         botonNueva.title = pasado ? 'No se pueden agendar citas en fechas pasadas' : '';
 
         try {
@@ -99,11 +105,12 @@ const Agenda = {
             if (!disp.abierto) {
                 cont.innerHTML = vacio(disp.mensaje, 'candado');
                 botonNueva.disabled = true;
+                document.getElementById('btn-urgencia').disabled = true;
                 return;
             }
             const gestion = App.puede('gestion');
             cont.innerHTML = disp.espacios.map(e => this.pintarHueco(e, gestion, pasado)).join('');
-            cont.querySelectorAll('.hueco').forEach(b => b.onclick = () => this.clicHueco(b));
+            cont.querySelectorAll('.hueco').forEach(b => b.onclick = ev => this.clicHueco(b, ev));
         } catch (err) {
             mensaje.textContent = '';
             cont.innerHTML = `<p class="error-form" style="grid-column:1/-1">${esc(err.message)}</p>`;
@@ -147,10 +154,15 @@ const Agenda = {
             <span class="hueco__hora">${icono(sub === 'Registrar asistencia' ? 'alerta' : ic)}${Fecha.hora12(e.hora)}</span>
             <span class="hueco__texto">${texto}</span>
             ${sub ? `<span class="hueco__sub">${esc(sub)}</span>` : ''}
+            ${(e.urgencias || []).map(u => `<span class="hueco__urgencia${u.estadoCita === 'Completada' ? ' hueco__urgencia--atendida' : ''}"
+                data-urgencia="${u.citaId}" title="Urgencia (sobrecupo) de ${Fecha.hora12(u.inicio)} a ${Fecha.hora12(u.fin)}">${icono('alerta')}${Fecha.hora12(u.inicio)} · ${esc(u.pacienteNombre)}</span>`).join('')}
         </button>`;
     },
 
-    clicHueco(boton) {
+    clicHueco(boton, ev) {
+        const urgencia = ev?.target.closest('[data-urgencia]') || (!boton.dataset.cita && boton.dataset.estado === 'PASADO'
+            ? boton.querySelector('[data-urgencia]') : null);
+        if (urgencia) return CitasVista.verDetalle(Number(urgencia.dataset.urgencia));
         const { estado, hora, cita } = boton.dataset;
         if (cita) return CitasVista.verDetalle(Number(cita));
         if (estado === 'PASADO') return toast('Esa hora ya pasó; no se pueden agendar citas en el pasado.', 'error');

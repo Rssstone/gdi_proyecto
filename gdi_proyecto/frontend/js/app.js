@@ -15,6 +15,7 @@ const App = {
         switch (accion) {
             case 'gestion': return rol === 'Recepcionista' || rol === 'Administrador';
             case 'eliminar': return rol === 'Administrador';
+            case 'clinico': return rol === 'Odontologo' || rol === 'Administrador';
             default: return true;
         }
     },
@@ -80,13 +81,14 @@ const App = {
         document.getElementById('usuario-rol').textContent = usuario.rol === 'Odontologo' ? 'Odontólogo(a)' : usuario.rol;
         document.getElementById('usuario-avatar').textContent = usuario.nombreCompleto
             .replace(/^(Dra?\.)\s*/i, '').split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase();
-        document.querySelectorAll('[data-rol=gestion]').forEach(el => el.hidden = !this.puede('gestion'));
+        document.querySelectorAll('[data-rol]').forEach(el => el.hidden = !this.puede(el.dataset.rol));
 
         // El odontólogo ve por defecto su propia agenda.
         const propio = this.odontologos.find(o => o.id === usuario.id);
         Agenda.iniciar(propio ? propio.id : this.odontologos[0]?.id);
         CitasVista.iniciar();
         PacientesVista.iniciar();
+        TecnicoVista.iniciar();
         this.pintarReloj();
         this.mostrarVista('agenda');
 
@@ -103,7 +105,7 @@ const App = {
     mostrarVista(vista) {
         this.vista = vista;
         document.querySelectorAll('#tabs .tab').forEach(t => t.classList.toggle('activo', t.dataset.vista === vista));
-        ['agenda', 'citas', 'pacientes'].forEach(v => document.getElementById(`vista-${v}`).hidden = v !== vista);
+        ['agenda', 'citas', 'pacientes', 'tecnico'].forEach(v => document.getElementById(`vista-${v}`).hidden = v !== vista);
         this.refrescar();
     },
 
@@ -113,6 +115,7 @@ const App = {
         if (this.vista === 'agenda') await Agenda.cargar();
         if (this.vista === 'citas') await CitasVista.cargar();
         if (this.vista === 'pacientes') await PacientesVista.cargar();
+        if (this.vista === 'tecnico') await TecnicoVista.cargar();
     },
 
     /** Cada minuto: actualiza la hora del servidor para que las horas que van pasando se bloqueen solas. */
