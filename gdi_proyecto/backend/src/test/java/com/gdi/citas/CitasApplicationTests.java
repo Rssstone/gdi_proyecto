@@ -319,7 +319,8 @@ class CitasApplicationTests {
     @Test
     void unPacienteNoPuedeTenerUrgenciaYCitaAlMismoTiempo() throws Exception {
         crear(juan, HOY, "11:00").andExpect(status().isCreated());
-        urgencia(juan, HOY, "11:10", 15).andExpect(status().isConflict());
+        urgencia(juan, HOY, "11:10", 15).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje", containsString("Juan Pérez ya tiene una cita")));
     }
 
     /* ---------- Expediente y odontograma ---------- */

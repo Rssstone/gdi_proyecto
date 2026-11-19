@@ -19,11 +19,6 @@ const Agenda = {
             fecha: this.dia >= App.hoy ? this.dia : App.hoy,
             odontologoId: this.odontologoId,
         });
-        document.getElementById('btn-urgencia').onclick = () => CitasVista.abrirFormulario({
-            fecha: this.dia > App.hoy ? this.dia : App.hoy,
-            odontologoId: this.odontologoId,
-            urgente: true,
-        });
         this.irAHoy(false);
     },
 
@@ -96,7 +91,6 @@ const Agenda = {
         const pasado = this.dia < App.hoy;
         const botonNueva = document.getElementById('btn-nueva-cita');
         botonNueva.disabled = pasado;
-        document.getElementById('btn-urgencia').disabled = pasado;
         botonNueva.title = pasado ? 'No se pueden agendar citas en fechas pasadas' : '';
 
         try {
@@ -105,7 +99,6 @@ const Agenda = {
             if (!disp.abierto) {
                 cont.innerHTML = vacio(disp.mensaje, 'candado');
                 botonNueva.disabled = true;
-                document.getElementById('btn-urgencia').disabled = true;
                 return;
             }
             const gestion = App.puede('gestion');

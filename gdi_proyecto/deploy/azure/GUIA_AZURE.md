@@ -104,6 +104,7 @@ en su laptop; **no hay que registrar la IP de nadie**.
 | Qué | Dónde | Cómo |
 |---|---|---|
 | Subir cambios del backend | VM backend | `cd gdi_proyecto/gdi_proyecto && sudo bash deploy/azure/actualizar-backend.sh` |
+| Ver en vivo lo que hace el backend (cada petición, citas agendadas, rechazos) | VM backend | `sudo journalctl -u gdi-backend -f` (salir con Ctrl + C) |
 | Estado / errores del backend | VM backend | `sudo systemctl status gdi-backend` · `sudo journalctl -u gdi-backend -n 80` |
 | Entrar a la base de datos | VM MySQL | `sudo mysql gdi_db` |
 | Respaldo manual | VM MySQL | `sudo /etc/cron.daily/gdi-respaldo` (queda en `/var/backups/gdi`) |
