@@ -53,6 +53,7 @@ const FichasTecnicas = {
 
     verDetalle(f, alCerrar) {
         const clinico = App.puede('clinico');
+        if (!clinico) return this.verEntrega(f);
         const dato = (titulo, valor, ancho) => `<div class="detalle__dato${ancho ? ' detalle__ancho' : ''}"><small>${titulo}</small><strong>${valor}</strong></div>`;
         const cuerpo = Modal.abrir('Ficha técnica', `
             <div class="detalle__cabecera">
@@ -91,6 +92,24 @@ const FichasTecnicas = {
                 toast(err.message, 'error');
             }
         });
+    },
+
+    /** Lo que ve recepción: solo los datos para coordinar la entrega del laboratorio, sin especificaciones. */
+    verEntrega(f) {
+        const dato = (titulo, valor) => `<div class="detalle__dato"><small>${titulo}</small><strong>${valor}</strong></div>`;
+        Modal.abrir('Entrega del laboratorio', `
+            <div class="detalle__cabecera">
+                <div><h4>${esc(TIPOS_TRABAJO[f.tipoTrabajo])} · ${esc(f.pacienteNombre)}</h4>
+                    <div>Piezas ${esc(f.piezas)} · ${esc(f.odontologoNombre || '')}</div>${this.entrega(f)}</div>
+            </div>
+            <div class="detalle">
+                ${dato('Laboratorio', esc(f.laboratorio || '—'))}
+                ${dato('Fecha de entrega', f.fechaEntrega ? esc(Fecha.larguisima(f.fechaEntrega)) : 'Sin fecha')}
+                ${dato('Toma de medidas', esc(Fecha.corta(f.fechaToma)))}
+                ${dato('Odontólogo', esc(f.odontologoNombre || '—'))}
+            </div>
+            <p class="aviso aviso--info">Las especificaciones técnicas solo las registra y consulta el odontólogo.
+                Usa esta fecha para agendar la cita de colocación con el paciente.</p>`, { chico: true });
     },
 
     /** Alta o edición. datos: { ficha } para editar o { paciente } para una nueva. */
@@ -237,6 +256,18 @@ const TecnicoVista = {
                     .sort((a, b) => (a.fechaEntrega || '9999').localeCompare(b.fechaEntrega || '9999'));
             }
             if (!fichas.length) { cont.innerHTML = vacio(this.filtro === 'pendientes' ? 'No hay trabajos pendientes de entrega.' : 'No hay fichas técnicas.', 'diente'); return; }
+            if (!App.puede('clinico')) {
+                cont.innerHTML = `<p class="aviso aviso--info" style="margin-bottom:12px">Recepción ve solo las fechas de entrega del laboratorio para agendar la colocación. Las especificaciones las maneja el odontólogo.</p>
+                    <table class="tabla"><thead><tr><th>Paciente</th><th>Trabajo</th><th>Laboratorio</th><th>Entrega</th></tr></thead>
+                    <tbody>${fichas.map(f => `<tr data-id="${f.id}">
+                        <td><strong>${esc(f.pacienteNombre)}</strong><small>${esc(f.odontologoNombre || '')}</small></td>
+                        <td><strong>${esc(TIPOS_TRABAJO[f.tipoTrabajo])}</strong><small>Pieza(s) ${esc(f.piezas)}</small></td>
+                        <td>${esc(f.laboratorio || '—')}</td>
+                        <td>${FichasTecnicas.entrega(f)}<small>${f.fechaEntrega ? esc(Fecha.corta(f.fechaEntrega)) : ''}</small></td>
+                    </tr>`).join('')}</tbody></table>`;
+                cont.querySelectorAll('tbody tr').forEach(tr => tr.onclick = () => FichasTecnicas.verEntrega(fichas.find(f => f.id === Number(tr.dataset.id))));
+                return;
+            }
             cont.innerHTML = `<table class="tabla"><thead><tr><th>Paciente</th><th>Trabajo</th><th>Material y color</th><th>Medidas</th><th>Entrega</th></tr></thead>
                 <tbody>${fichas.map(f => `<tr data-id="${f.id}">
                     <td><strong>${esc(f.pacienteNombre)}</strong><small>${esc(f.odontologoNombre || '')}</small></td>

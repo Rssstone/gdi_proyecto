@@ -37,6 +37,7 @@ import com.gdi.citas.model.EstadoCita;
 import com.gdi.citas.model.Paciente;
 import com.gdi.citas.model.Rol;
 import com.gdi.citas.model.Usuario;
+import com.gdi.citas.repository.CambioOdontogramaRepository;
 import com.gdi.citas.repository.CitaRepository;
 import com.gdi.citas.repository.DienteOdontogramaRepository;
 import com.gdi.citas.repository.EstudioRepository;
@@ -69,6 +70,7 @@ class CitasApplicationTests {
     @Autowired UsuarioRepository usuarios;
     @Autowired ExpedienteRepository expedientes;
     @Autowired DienteOdontogramaRepository dientes;
+    @Autowired CambioOdontogramaRepository cambios;
     @Autowired FichaTecnicaRepository fichas;
     @Autowired EstudioRepository estudios;
 
@@ -82,6 +84,7 @@ class CitasApplicationTests {
         mvc = MockMvcBuilders.webAppContextSetup(context).build();
         estudios.deleteAll();
         fichas.deleteAll();
+        cambios.deleteAll();
         dientes.deleteAll();
         expedientes.deleteAll();
         citas.deleteAll();
@@ -319,7 +322,8 @@ class CitasApplicationTests {
     @Test
     void unPacienteNoPuedeTenerUrgenciaYCitaAlMismoTiempo() throws Exception {
         crear(juan, HOY, "11:00").andExpect(status().isCreated());
-        urgencia(juan, HOY, "11:10", 15).andExpect(status().isConflict());
+        urgencia(juan, HOY, "11:10", 15).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje", containsString("Juan Pérez ya tiene una cita")));
     }
 
     /* ---------- Expediente y odontograma ---------- */
@@ -331,26 +335,40 @@ class CitasApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.alergias").value("Penicilina"));
 
-        mvc.perform(put("/api/pacientes/" + juan.getId() + "/odontograma/16").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"estado\":\"Caries\",\"superficies\":[\"M\",\"O\",\"O\"],\"descripcion\":\"Caries profunda\"}"))
+        String base = "/api/pacientes/" + juan.getId();
+        // Endodoncia en la pieza y, además, caries en la cara oclusal y resina en la mesial.
+        mvc.perform(put(base + "/odontograma/16").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"Endodoncia\",\"caras\":{\"M\":\"Restaurado\",\"O\":\"Caries\"},\"usuarioId\":" + dra.getId() + "}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.superficies", hasSize(2)));
-        mvc.perform(put("/api/pacientes/" + juan.getId() + "/odontograma/21").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"estado\":\"Corona\",\"superficies\":[\"O\"]}"))
-                .andExpect(jsonPath("$.superficies", hasSize(0)));
+                .andExpect(jsonPath("$.estado").value("Endodoncia"))
+                .andExpect(jsonPath("$.caras.O").value("Caries"));
+        // Después del tratamiento la caries queda restaurada.
+        mvc.perform(put(base + "/odontograma/16").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"Endodoncia\",\"caras\":{\"M\":\"Restaurado\",\"O\":\"Restaurado\"},\"descripcion\":\"Resina oclusal\"}"))
+                .andExpect(jsonPath("$.caras.O").value("Restaurado"));
 
-        mvc.perform(get("/api/pacientes/" + juan.getId() + "/expediente"))
-                .andExpect(jsonPath("$.dientes", hasSize(2)))
+        mvc.perform(get(base + "/expediente"))
+                .andExpect(jsonPath("$.dientes", hasSize(1)))
                 .andExpect(jsonPath("$.dientes[0].numero").value(16))
-                .andExpect(jsonPath("$.dientes[0].superficies[0]").value("O"));
+                .andExpect(jsonPath("$.dientes[0].caras.M").value("Restaurado"));
 
-        // Al marcarlo sano sin notas, el diente deja de guardarse.
-        mvc.perform(put("/api/pacientes/" + juan.getId() + "/odontograma/21").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"estado\":\"Sano\"}")).andExpect(status().isOk());
-        mvc.perform(get("/api/pacientes/" + juan.getId() + "/expediente")).andExpect(jsonPath("$.dientes", hasSize(1)));
+        mvc.perform(get(base + "/odontograma/historial"))
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].antes").value("Endodoncia · Caries (O) · Restaurado (M)"))
+                .andExpect(jsonPath("$[0].despues").value("Endodoncia · Restaurado (O, M)"))
+                .andExpect(jsonPath("$[1].antes").value("Sano"))
+                .andExpect(jsonPath("$[1].usuarioNombre").value("Dra. Ana López"));
 
-        mvc.perform(put("/api/pacientes/" + juan.getId() + "/odontograma/19").contentType(MediaType.APPLICATION_JSON)
+        // Ayer la pieza 16 todavía estaba sana: el odontograma de esa fecha no la muestra.
+        mvc.perform(get(base + "/expediente").param("fecha", HOY.minusDays(1).toString()))
+                .andExpect(jsonPath("$.dientes", hasSize(0)));
+
+        mvc.perform(put(base + "/odontograma/21").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"estado\":\"Caries\"}")).andExpect(status().isUnprocessableContent());
+        mvc.perform(put(base + "/odontograma/21").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"estado\":\"Sano\",\"caras\":{\"X\":\"Caries\"}}")).andExpect(status().isUnprocessableContent());
+        mvc.perform(put(base + "/odontograma/19").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"estado\":\"Corona\"}")).andExpect(status().isUnprocessableContent());
     }
 
     /* ---------- Módulo técnico ---------- */

@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,8 @@ import com.gdi.citas.repository.UsuarioRepository;
 public class CitaService {
 
     private static final DateTimeFormatter MARCA = DateTimeFormatter.ofPattern("dd/MM HH:mm");
+
+    private static final Logger log = LoggerFactory.getLogger(CitaService.class);
 
     private final CitaRepository citaRepository;
     private final PacienteRepository pacienteRepository;
@@ -74,7 +78,11 @@ public class CitaService {
         validarHorario(cita);
         validarConflictos(cita);
         cita.setEstado(EstadoCita.Programada);
-        return aRespuesta(citaRepository.save(cita));
+        Cita guardada = citaRepository.save(cita);
+        log.info("{} #{} agendada: {} · {} {} ({} min) · {} · {}", cita.isUrgente() ? "Urgencia" : "Cita",
+                guardada.getId(), cita.getPaciente().getNombreCompleto(), cita.getFecha(), cita.getHora(),
+                cita.getDuracionMinutos(), cita.getMotivo(), cita.getOdontologo().getNombreCompleto());
+        return aRespuesta(guardada);
     }
 
     @Transactional
@@ -98,6 +106,8 @@ public class CitaService {
             // Un cambio de horario requiere volver a confirmar con el paciente.
             cita.setEstado(EstadoCita.Programada);
         }
+        log.info("Cita #{} {}: {} · {} {} ({} min)", id, reprogramada ? "reprogramada" : "editada",
+                cita.getPaciente().getNombreCompleto(), cita.getFecha(), cita.getHora(), cita.getDuracionMinutos());
         return aRespuesta(cita);
     }
 
@@ -131,6 +141,7 @@ public class CitaService {
             }
         }
         cita.setEstado(nuevo);
+        log.info("Cita #{} de {}: {} -> {}", id, cita.getPaciente().getNombreCompleto(), actual, nuevo);
         if (req.nota() != null && !req.nota().isBlank()) {
             String marca = "[" + nuevo + " " + agenda.ahora().format(MARCA) + "] " + req.nota().trim();
             String previas = cita.getNotasRecepcion();
@@ -147,6 +158,7 @@ public class CitaService {
                     "Las citas completadas forman parte del historial del paciente y no se pueden eliminar.");
         }
         citaRepository.delete(cita);
+        log.info("Cita #{} de {} eliminada", id, cita.getPaciente().getNombreCompleto());
     }
 
     private void aplicarDatos(Cita cita, CitaRequest req) {
@@ -189,6 +201,13 @@ public class CitaService {
                 .filter(otra -> otra.seEmpalmaCon(cita.getHora(), cita.getHoraFin()))
                 .findFirst()
                 .ifPresent(otra -> {
+                    if (otra.getPaciente().getId().equals(pacienteId)) {
+                        throw ReglaNegocioException.conflicto(otra.getPaciente().getNombreCompleto()
+                                + " ya tiene una cita de " + otra.getHora() + " a " + otra.getHoraFin()
+                                + " ese día y un paciente no puede tener dos citas al mismo tiempo. "
+                                + (cita.isUrgente() ? "Atiende la urgencia dentro de esa cita o elige otra hora."
+                                        : "Elige otro horario."));
+                    }
                     throw ReglaNegocioException.conflicto("El horario de " + cita.getHora() + " a " + cita.getHoraFin()
                             + " se empalma con la cita de " + otra.getPaciente().getNombreCompleto()
                             + " (" + otra.getHora() + " a " + otra.getHoraFin() + "). Elige otro horario o una duración menor.");

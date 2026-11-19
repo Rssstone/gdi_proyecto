@@ -316,7 +316,7 @@ const CitasVista = {
                     </label>
                 </div>
                 <label class="campo" id="campo-hora">
-                    <span class="campo__etiqueta">Hora <b class="req">*</b></span>
+                    <span class="campo__etiqueta">Horarios disponibles <b class="req">*</b></span>
                     <select name="hora"></select>
                     <span class="campo__ayuda" id="cita-hora-ayuda"></span>
                     <span class="campo__error" data-error="hora"></span>
@@ -389,6 +389,15 @@ const CitasVista = {
                 this.abrirFormulario(c ? { cita: { ...c, ...aCita(borrador(), nuevo) } } : { ...borrador(), paciente: nuevo })),
         });
 
+        /* Debajo de la lista: a qué hora terminaría la cita con la duración elegida. */
+        const pintarFin = () => {
+            const ayuda = cuerpo.querySelector('#cita-hora-ayuda');
+            const hora = form.hora.value;
+            ayuda.textContent = hora
+                ? `La cita sería de ${Fecha.hora12(hora)} a ${Fecha.hora12(sumarMinutos(hora, Number(form.duracionMinutos.value)))}`
+                : `Solo aparecen los horarios en los que cabe la cita completa (${Fecha.duracion(Number(form.duracionMinutos.value))}).`;
+        };
+
         /* ---- Cita programada: lista de horas libres en las que cabe la cita completa ---- */
         const cargarHoras = async () => {
             const ayuda = cuerpo.querySelector('#cita-hora-ayuda');
@@ -423,10 +432,10 @@ const CitasVista = {
                     return;
                 }
                 select.disabled = false;
-                select.innerHTML = '<option value="">Elige la hora…</option>' + libres.map(e =>
-                    `<option value="${e.hora}">${Fecha.hora12(e.hora)}  →  termina ${Fecha.hora12(sumarMinutos(e.hora, duracion))}</option>`).join('');
+                select.innerHTML = `<option value="">Elige un horario (${libres.length} disponibles)</option>` + libres.map(e =>
+                    `<option value="${e.hora}">${Fecha.hora12(e.hora)}</option>`).join('');
                 select.value = libres.some(e => e.hora === estado.hora) ? estado.hora : '';
-                ayuda.textContent = `${libres.length} horario(s) libre(s) para ${Fecha.duracion(duracion)} · el primero es a las ${Fecha.hora12(libres[0].hora)}`;
+                pintarFin();
             } catch (err) {
                 sinOpciones('No se pudieron cargar los horarios');
                 ayuda.textContent = err.message;
@@ -512,7 +521,7 @@ const CitasVista = {
         };
         form.odontologoId.onchange = actualizar;
         form.duracionMinutos.onchange = actualizar;
-        form.hora.onchange = () => limpiarError('hora');
+        form.hora.onchange = () => { limpiarError('hora'); pintarFin(); };
         form.horaUrgencia.onchange = revisarUrgencia;
         aplicarTipo(estado.motivo, estado.duracion);
 
@@ -527,7 +536,7 @@ const CitasVista = {
             if (!estado.paciente) errores.pacienteId = 'Selecciona o registra un paciente.';
             if (!form.fecha.value) errores.fecha = 'Elige una fecha.';
             else if (form.fecha.value < App.hoy) errores.fecha = 'No se pueden agendar citas en fechas pasadas.';
-            if (!hora) errores[urg ? 'horaUrgencia' : 'hora'] = urg ? 'Indica la hora de atención.' : 'Elige una hora de la lista.';
+            if (!hora) errores[urg ? 'horaUrgencia' : 'hora'] = urg ? 'Indica la hora de atención.' : 'Elige uno de los horarios disponibles.';
             if (motivo.length < 3) errores.motivo = form.procedimiento.value === OTRO ? 'Describe el motivo (mínimo 3 caracteres).' : 'Elige el procedimiento.';
             if (Object.keys(errores).length) return mostrarErrores(errores);
 

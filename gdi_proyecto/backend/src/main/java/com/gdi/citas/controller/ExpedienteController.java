@@ -1,7 +1,9 @@
 package com.gdi.citas.controller;
 
+import java.time.LocalDate;
 import java.util.List;
 
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.gdi.citas.dto.EstudioDtos.EstudioResponse;
+import com.gdi.citas.dto.ExpedienteDtos.CambioResponse;
 import com.gdi.citas.dto.ExpedienteDtos.DienteRequest;
 import com.gdi.citas.dto.ExpedienteDtos.DienteResponse;
 import com.gdi.citas.dto.ExpedienteDtos.ExpedienteRequest;
@@ -41,9 +44,16 @@ public class ExpedienteController {
         this.estudioService = estudioService;
     }
 
+    /** Con ?fecha=AAAA-MM-DD devuelve el odontograma como estaba al final de ese día. */
     @GetMapping("/pacientes/{pacienteId}/expediente")
-    public ExpedienteResponse obtener(@PathVariable Integer pacienteId) {
-        return expedienteService.obtener(pacienteId);
+    public ExpedienteResponse obtener(@PathVariable Integer pacienteId,
+                                      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
+        return expedienteService.obtener(pacienteId, fecha);
+    }
+
+    @GetMapping("/pacientes/{pacienteId}/odontograma/historial")
+    public List<CambioResponse> historial(@PathVariable Integer pacienteId) {
+        return expedienteService.historial(pacienteId);
     }
 
     @PutMapping("/pacientes/{pacienteId}/expediente")

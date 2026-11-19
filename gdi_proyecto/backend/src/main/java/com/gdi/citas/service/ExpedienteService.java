@@ -1,51 +1,83 @@
 package com.gdi.citas.service;
 
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
+import java.util.Objects;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.gdi.citas.dto.ExpedienteDtos.CambioResponse;
 import com.gdi.citas.dto.ExpedienteDtos.DienteRequest;
 import com.gdi.citas.dto.ExpedienteDtos.DienteResponse;
 import com.gdi.citas.dto.ExpedienteDtos.ExpedienteRequest;
 import com.gdi.citas.dto.ExpedienteDtos.ExpedienteResponse;
 import com.gdi.citas.exception.RecursoNoEncontradoException;
 import com.gdi.citas.exception.ReglaNegocioException;
+import com.gdi.citas.model.CambioOdontograma;
 import com.gdi.citas.model.DienteOdontograma;
 import com.gdi.citas.model.EstadoDiente;
+import com.gdi.citas.model.EstadoPieza;
 import com.gdi.citas.model.Expediente;
 import com.gdi.citas.model.Paciente;
+import com.gdi.citas.repository.CambioOdontogramaRepository;
 import com.gdi.citas.repository.DienteOdontogramaRepository;
 import com.gdi.citas.repository.ExpedienteRepository;
 import com.gdi.citas.repository.PacienteRepository;
+import com.gdi.citas.repository.UsuarioRepository;
 
-/** Expediente clínico y odontograma del paciente. */
+/** Expediente clínico y odontograma del paciente, con historial de cambios por pieza. */
 @Service
 public class ExpedienteService {
 
-    /** Caras del diente: oclusal/incisal, mesial, distal, vestibular y lingual/palatino. */
-    private static final List<String> SUPERFICIES = List.of("O", "M", "D", "V", "L");
+    private static final Logger log = LoggerFactory.getLogger(ExpedienteService.class);
 
     private final PacienteRepository pacienteRepository;
     private final ExpedienteRepository expedienteRepository;
     private final DienteOdontogramaRepository dienteRepository;
+    private final CambioOdontogramaRepository cambioRepository;
+    private final UsuarioRepository usuarioRepository;
+    private final Clock clock;
 
     public ExpedienteService(PacienteRepository pacienteRepository, ExpedienteRepository expedienteRepository,
-                             DienteOdontogramaRepository dienteRepository) {
+                             DienteOdontogramaRepository dienteRepository, CambioOdontogramaRepository cambioRepository,
+                             UsuarioRepository usuarioRepository, Clock clock) {
         this.pacienteRepository = pacienteRepository;
         this.expedienteRepository = expedienteRepository;
         this.dienteRepository = dienteRepository;
+        this.cambioRepository = cambioRepository;
+        this.usuarioRepository = usuarioRepository;
+        this.clock = clock;
+    }
+
+    /** Expediente con el odontograma actual, o con el que tenía al final del día indicado. */
+    @Transactional(readOnly = true)
+    public ExpedienteResponse obtener(Integer pacienteId, LocalDate fecha) {
+        Paciente paciente = buscarPaciente(pacienteId);
+        Expediente expediente = expedienteRepository.findFirstByPacienteIdOrderByIdAsc(pacienteId).orElse(null);
+        List<DienteResponse> dientes = expediente == null ? List.of() : odontograma(expediente, fecha);
+        return ExpedienteResponse.de(pacienteId, paciente.getNombreCompleto(), expediente, dientes);
     }
 
     @Transactional(readOnly = true)
-    public ExpedienteResponse obtener(Integer pacienteId) {
-        Paciente paciente = buscarPaciente(pacienteId);
-        Expediente expediente = expedienteRepository.findFirstByPacienteIdOrderByIdAsc(pacienteId).orElse(null);
-        List<DienteResponse> dientes = expediente == null ? List.of()
-                : dienteRepository.findByExpedienteIdOrderByNumeroDienteAsc(expediente.getId()).stream()
-                        .map(DienteResponse::de).toList();
-        return ExpedienteResponse.de(pacienteId, paciente.getNombreCompleto(), expediente, dientes);
+    public List<CambioResponse> historial(Integer pacienteId) {
+        buscarPaciente(pacienteId);
+        return expedienteRepository.findFirstByPacienteIdOrderByIdAsc(pacienteId)
+                .map(e -> cambioRepository.findByExpedienteIdOrderByFechaAscIdAsc(e.getId()).stream()
+                        .sorted(Comparator.comparing(CambioOdontograma::getFecha).thenComparing(CambioOdontograma::getId).reversed())
+                        .map(CambioResponse::de).toList())
+                .orElse(List.of());
     }
 
     @Transactional
@@ -54,44 +86,90 @@ public class ExpedienteService {
         e.setAntecedentesPersonales(limpiar(req.antecedentesPersonales()));
         e.setAntecedentesFamiliares(limpiar(req.antecedentesFamiliares()));
         e.setAlergias(limpiar(req.alergias()));
-        return obtener(pacienteId);
+        return obtener(pacienteId, null);
     }
 
     /**
-     * Registra el estado de una pieza. Si queda sana y sin notas se borra el registro, porque el odontograma
-     * solo guarda hallazgos.
+     * Registra el estado de una pieza y deja el cambio en el historial. Si queda sana y sin notas se borra el
+     * registro, porque el odontograma solo guarda hallazgos.
      */
     @Transactional
     public DienteResponse guardarDiente(Integer pacienteId, int numero, DienteRequest req) {
         validarNumero(numero);
+        EstadoPieza nuevo = validar(req);
         Expediente expediente = expedienteDe(buscarPaciente(pacienteId));
         DienteOdontograma diente = dienteRepository.findByExpedienteIdAndNumeroDiente(expediente.getId(), numero)
                 .orElseGet(() -> {
-                    DienteOdontograma nuevo = new DienteOdontograma();
-                    nuevo.setExpediente(expediente);
-                    nuevo.setNumeroDiente(numero);
-                    return nuevo;
+                    DienteOdontograma d = new DienteOdontograma();
+                    d.setExpediente(expediente);
+                    d.setNumeroDiente(numero);
+                    return d;
                 });
+        EstadoPieza anterior = diente.getId() == null ? EstadoPieza.SANA : diente.getEstadoPieza();
         String descripcion = limpiar(req.descripcion());
-        if (req.estado() == EstadoDiente.Sano && descripcion == null) {
-            if (diente.getId() != null) dienteRepository.delete(diente);
-            return new DienteResponse(numero, EstadoDiente.Sano, List.of(), null);
+
+        if (!anterior.equals(nuevo) || !Objects.equals(descripcion, diente.getDescripcion())) {
+            CambioOdontograma cambio = new CambioOdontograma();
+            cambio.setExpediente(expediente);
+            cambio.setNumeroDiente(numero);
+            cambio.setAnterior(anterior);
+            cambio.setNuevo(nuevo);
+            cambio.setDescripcion(descripcion);
+            cambio.setUsuario(req.usuarioId() == null ? null : usuarioRepository.findById(req.usuarioId()).orElse(null));
+            cambio.setFecha(LocalDateTime.now(clock).truncatedTo(ChronoUnit.SECONDS));
+            cambioRepository.save(cambio);
+            log.info("Odontograma de {} · pieza {}: {} -> {}", expediente.getPaciente().getNombreCompleto(), numero,
+                    anterior.texto(), nuevo.texto());
         }
-        diente.setEstado(req.estado());
-        diente.setSuperficies(superficies(req));
+
+        if (nuevo.esSana() && descripcion == null) {
+            if (diente.getId() != null) dienteRepository.delete(diente);
+            return DienteResponse.de(numero, EstadoPieza.SANA, null);
+        }
+        diente.setEstadoPieza(nuevo);
         diente.setDescripcion(descripcion);
-        return DienteResponse.de(dienteRepository.save(diente));
+        dienteRepository.save(diente);
+        return DienteResponse.de(numero, nuevo, descripcion);
     }
 
-    /** Solo caries, restauraciones y fracturas se marcan por cara; se guardan en orden y sin repetir. */
-    private static String superficies(DienteRequest req) {
-        if (!req.estado().esPorSuperficie() || req.superficies() == null) return null;
-        Set<String> elegidas = Set.copyOf(req.superficies());
-        elegidas.forEach(s -> {
-            if (!SUPERFICIES.contains(s)) throw new ReglaNegocioException("Superficie no válida: " + s);
+    /**
+     * Odontograma al final del día indicado: una pieza que cambió después de esa fecha estaba como indica el
+     * "antes" de su primer cambio posterior; las demás siguen como hoy.
+     */
+    private List<DienteResponse> odontograma(Expediente expediente, LocalDate fecha) {
+        Map<Integer, DienteResponse> actuales = new TreeMap<>();
+        dienteRepository.findByExpedienteIdOrderByNumeroDienteAsc(expediente.getId())
+                .forEach(d -> actuales.put(d.getNumeroDiente(), DienteResponse.de(d.getNumeroDiente(), d.getEstadoPieza(), d.getDescripcion())));
+        if (fecha == null) return List.copyOf(actuales.values());
+
+        LocalDateTime limite = LocalDateTime.of(fecha, LocalTime.MAX);
+        Map<Integer, CambioOdontograma> primerCambioPosterior = cambioRepository
+                .findByExpedienteIdOrderByFechaAscIdAsc(expediente.getId()).stream()
+                .filter(c -> c.getFecha().isAfter(limite))
+                .collect(Collectors.toMap(CambioOdontograma::getNumeroDiente, c -> c, (primero, otro) -> primero, LinkedHashMap::new));
+        Map<Integer, DienteResponse> enFecha = new TreeMap<>(actuales);
+        primerCambioPosterior.forEach((numero, cambio) -> {
+            EstadoPieza antes = cambio.getAnterior();
+            if (antes.esSana()) enFecha.remove(numero);
+            else enFecha.put(numero, DienteResponse.de(numero, antes, null));
         });
-        String caras = String.join(",", SUPERFICIES.stream().filter(elegidas::contains).toList());
-        return caras.isEmpty() ? null : caras;
+        return List.copyOf(enFecha.values());
+    }
+
+    /** La pieza completa solo admite hallazgos de pieza; las caras, solo caries, restauración o fractura. */
+    private static EstadoPieza validar(DienteRequest req) {
+        if (req.estado().esPorSuperficie()) {
+            throw new ReglaNegocioException(req.estado() + " se marca por cara del diente, no en la pieza completa.");
+        }
+        Map<String, EstadoDiente> caras = req.caras() == null || req.estado() == EstadoDiente.Ausente
+                ? Map.of() : req.caras();
+        caras.forEach((cara, e) -> {
+            if (!EstadoPieza.CARAS.contains(cara)) throw new ReglaNegocioException("Cara no válida: " + cara);
+            if (e == null || !e.esPorSuperficie()) {
+                throw new ReglaNegocioException("En la cara " + cara + " solo se marca caries, restauración o fractura.");
+            }
+        });
+        return EstadoPieza.nueva(req.estado(), caras);
     }
 
     /** Numeración FDI de dientes permanentes: cuadrante 1 a 4 y pieza 1 a 8 (11 a 48). */

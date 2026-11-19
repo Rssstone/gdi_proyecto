@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -19,6 +21,8 @@ import com.gdi.citas.dto.ErrorResponse;
 @RestControllerAdvice
 public class ManejadorErrores {
 
+    private static final Logger log = LoggerFactory.getLogger(ManejadorErrores.class);
+
     @ExceptionHandler(RecursoNoEncontradoException.class)
     ResponseEntity<ErrorResponse> noEncontrado(RecursoNoEncontradoException e) {
         return respuesta(HttpStatus.NOT_FOUND, e.getMessage(), null);
@@ -26,6 +30,7 @@ public class ManejadorErrores {
 
     @ExceptionHandler(ReglaNegocioException.class)
     ResponseEntity<ErrorResponse> reglaNegocio(ReglaNegocioException e) {
+        log.warn("Rechazado por regla de negocio ({}): {}", e.getStatus().value(), e.getMessage());
         return respuesta(e.getStatus(), e.getMessage(), null);
     }
 

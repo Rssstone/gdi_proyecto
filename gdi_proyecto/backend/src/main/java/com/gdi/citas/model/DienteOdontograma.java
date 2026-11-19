@@ -33,7 +33,7 @@ public class DienteOdontograma {
     @Column(name = "estado_diente", length = 100)
     private EstadoDiente estado;
 
-    /** Caras afectadas, por ejemplo "O,M": O oclusal/incisal, M mesial, D distal, V vestibular, L lingual/palatino. */
+    /** Hallazgos por cara, por ejemplo "O:C,M:R" (ver EstadoPieza). */
     @Column(length = 20)
     private String superficies;
 
@@ -53,6 +53,9 @@ public class DienteOdontograma {
 
     public String getSuperficies() { return superficies; }
     public void setSuperficies(String superficies) { this.superficies = superficies; }
+
+    public EstadoPieza getEstadoPieza() { return EstadoPieza.de(estado, superficies); }
+    public void setEstadoPieza(EstadoPieza p) { this.estado = p.estado(); this.superficies = p.carasGuardadas(); }
 
     public String getDescripcion() { return descripcion; }
     public void setDescripcion(String descripcion) { this.descripcion = descripcion; }
