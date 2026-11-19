@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.gdi.citas.config.Bitacora;
 import com.gdi.citas.dto.PacienteDtos.PacienteRequest;
 import com.gdi.citas.dto.PacienteDtos.PacienteResponse;
 import com.gdi.citas.exception.RecursoNoEncontradoException;
@@ -38,13 +39,16 @@ public class PacienteService {
     public PacienteResponse crear(PacienteRequest req) {
         Paciente p = new Paciente();
         aplicar(p, req);
-        return PacienteResponse.de(pacienteRepository.save(p));
+        pacienteRepository.save(p);
+        Bitacora.anotar("Paciente #{} registrado: {} · tel. {}", p.getId(), p.getNombreCompleto(), p.getTelefono());
+        return PacienteResponse.de(p);
     }
 
     @Transactional
     public PacienteResponse actualizar(Integer id, PacienteRequest req) {
         Paciente p = buscarEntidad(id);
         aplicar(p, req);
+        Bitacora.anotar("Paciente #{} actualizado: {} · tel. {}", id, p.getNombreCompleto(), p.getTelefono());
         return PacienteResponse.de(p);
     }
 

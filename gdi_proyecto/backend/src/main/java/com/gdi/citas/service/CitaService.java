@@ -6,11 +6,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.gdi.citas.config.Bitacora;
 import com.gdi.citas.dto.CambioEstadoRequest;
 import com.gdi.citas.dto.CitaRequest;
 import com.gdi.citas.dto.CitaResponse;
@@ -31,7 +30,6 @@ public class CitaService {
 
     private static final DateTimeFormatter MARCA = DateTimeFormatter.ofPattern("dd/MM HH:mm");
 
-    private static final Logger log = LoggerFactory.getLogger(CitaService.class);
 
     private final CitaRepository citaRepository;
     private final PacienteRepository pacienteRepository;
@@ -79,7 +77,7 @@ public class CitaService {
         validarConflictos(cita);
         cita.setEstado(EstadoCita.Programada);
         Cita guardada = citaRepository.save(cita);
-        log.info("{} #{} agendada: {} · {} {} ({} min) · {} · {}", cita.isUrgente() ? "Urgencia" : "Cita",
+        Bitacora.anotar("{} #{} agendada: paciente {} · {} {} ({} min) · {} · con {}", cita.isUrgente() ? "Urgencia" : "Cita",
                 guardada.getId(), cita.getPaciente().getNombreCompleto(), cita.getFecha(), cita.getHora(),
                 cita.getDuracionMinutos(), cita.getMotivo(), cita.getOdontologo().getNombreCompleto());
         return aRespuesta(guardada);
@@ -106,7 +104,7 @@ public class CitaService {
             // Un cambio de horario requiere volver a confirmar con el paciente.
             cita.setEstado(EstadoCita.Programada);
         }
-        log.info("Cita #{} {}: {} · {} {} ({} min)", id, reprogramada ? "reprogramada" : "editada",
+        Bitacora.anotar("Cita #{} {}: paciente {} · ahora {} {} ({} min)", id, reprogramada ? "reprogramada" : "editada",
                 cita.getPaciente().getNombreCompleto(), cita.getFecha(), cita.getHora(), cita.getDuracionMinutos());
         return aRespuesta(cita);
     }
@@ -141,7 +139,7 @@ public class CitaService {
             }
         }
         cita.setEstado(nuevo);
-        log.info("Cita #{} de {}: {} -> {}", id, cita.getPaciente().getNombreCompleto(), actual, nuevo);
+        Bitacora.anotar("Cita #{} de {}: estado {} -> {}", id, cita.getPaciente().getNombreCompleto(), actual, nuevo);
         if (req.nota() != null && !req.nota().isBlank()) {
             String marca = "[" + nuevo + " " + agenda.ahora().format(MARCA) + "] " + req.nota().trim();
             String previas = cita.getNotasRecepcion();
@@ -158,7 +156,7 @@ public class CitaService {
                     "Las citas completadas forman parte del historial del paciente y no se pueden eliminar.");
         }
         citaRepository.delete(cita);
-        log.info("Cita #{} de {} eliminada", id, cita.getPaciente().getNombreCompleto());
+        Bitacora.anotar("Cita #{} de {} eliminada", id, cita.getPaciente().getNombreCompleto());
     }
 
     private void aplicarDatos(Cita cita, CitaRequest req) {

@@ -7,6 +7,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.gdi.citas.config.Bitacora;
 import com.gdi.citas.dto.UsuarioDtos.LoginRequest;
 import com.gdi.citas.dto.UsuarioDtos.UsuarioResponse;
 import com.gdi.citas.exception.ReglaNegocioException;
@@ -30,6 +31,7 @@ public class UsuarioService {
         Usuario usuario = usuarioRepository.findByEmailIgnoreCase(req.email().trim())
                 .filter(u -> coincide(u, req.password()))
                 .orElseThrow(() -> new ReglaNegocioException(HttpStatus.UNAUTHORIZED, "Correo o contraseña incorrectos."));
+        Bitacora.anotar("Entró {} ({})", usuario.getNombreCompleto(), usuario.getRol());
         return UsuarioResponse.de(usuario);
     }
 

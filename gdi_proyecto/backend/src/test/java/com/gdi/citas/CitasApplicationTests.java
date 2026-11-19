@@ -81,7 +81,8 @@ class CitasApplicationTests {
 
     @BeforeEach
     void preparar() {
-        mvc = MockMvcBuilders.webAppContextSetup(context).build();
+        mvc = MockMvcBuilders.webAppContextSetup(context)
+                .addFilters(context.getBean(com.gdi.citas.config.RegistroPeticiones.class)).build();
         estudios.deleteAll();
         fichas.deleteAll();
         cambios.deleteAll();

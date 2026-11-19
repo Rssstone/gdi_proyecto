@@ -13,11 +13,10 @@ import java.util.Objects;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.gdi.citas.config.Bitacora;
 import com.gdi.citas.dto.ExpedienteDtos.CambioResponse;
 import com.gdi.citas.dto.ExpedienteDtos.DienteRequest;
 import com.gdi.citas.dto.ExpedienteDtos.DienteResponse;
@@ -41,7 +40,6 @@ import com.gdi.citas.repository.UsuarioRepository;
 @Service
 public class ExpedienteService {
 
-    private static final Logger log = LoggerFactory.getLogger(ExpedienteService.class);
 
     private final PacienteRepository pacienteRepository;
     private final ExpedienteRepository expedienteRepository;
@@ -86,6 +84,7 @@ public class ExpedienteService {
         e.setAntecedentesPersonales(limpiar(req.antecedentesPersonales()));
         e.setAntecedentesFamiliares(limpiar(req.antecedentesFamiliares()));
         e.setAlergias(limpiar(req.alergias()));
+        Bitacora.anotar("Expediente de {}: antecedentes y alergias actualizados", e.getPaciente().getNombreCompleto());
         return obtener(pacienteId, null);
     }
 
@@ -118,7 +117,7 @@ public class ExpedienteService {
             cambio.setUsuario(req.usuarioId() == null ? null : usuarioRepository.findById(req.usuarioId()).orElse(null));
             cambio.setFecha(LocalDateTime.now(clock).truncatedTo(ChronoUnit.SECONDS));
             cambioRepository.save(cambio);
-            log.info("Odontograma de {} · pieza {}: {} -> {}", expediente.getPaciente().getNombreCompleto(), numero,
+            Bitacora.anotar("Odontograma de {} · diente {}: {} -> {}", expediente.getPaciente().getNombreCompleto(), numero,
                     anterior.texto(), nuevo.texto());
         }
 
