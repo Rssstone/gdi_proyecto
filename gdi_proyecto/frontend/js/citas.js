@@ -1,16 +1,40 @@
 /* Citas: listado con filtros, formulario de alta/reprogramación y detalle con acciones de estado. */
 
-/* Duración sugerida de cada procedimiento (la recepcionista puede ajustarla). */
-const MOTIVOS_FRECUENTES = [
-    { nombre: 'Revisión general', minutos: 30 },
-    { nombre: 'Limpieza dental', minutos: 60 },
-    { nombre: 'Resina', minutos: 60 },
-    { nombre: 'Extracción', minutos: 60 },
-    { nombre: 'Ortodoncia', minutos: 30 },
-    { nombre: 'Endodoncia', minutos: 90 },
-    { nombre: 'Urgencia', minutos: 30 },
+/* Procedimientos que se pueden agendar, con su duración sugerida (la recepcionista puede ajustarla). */
+const PROCEDIMIENTOS = [
+    ['Diagnóstico y prevención', [['Revisión general', 30], ['Valoración inicial', 30], ['Limpieza dental', 60]]],
+    ['Restauración', [['Resina', 60], ['Incrustación', 60]]],
+    ['Cirugía', [['Extracción simple', 60], ['Extracción de muela del juicio', 90]]],
+    ['Endodoncia', [['Endodoncia (tratamiento de conductos)', 90]]],
+    ['Ortodoncia', [['Colocación de brackets', 120], ['Ajuste de ortodoncia', 30]]],
+    ['Prótesis', [['Toma de medidas para corona o prótesis', 60], ['Colocación de corona', 60], ['Ajuste de prótesis', 30]]],
+    ['Estética', [['Blanqueamiento dental', 90]]],
+];
+/* Urgencias: se atienden como sobrecupo y son rápidas. */
+const URGENCIAS = [
+    ['Bracket despegado', 15], ['Dolor dental agudo', 30], ['Diente fracturado', 30],
+    ['Corona o provisional despegado', 20], ['Inflamación o infección', 30], ['Sangrado después de una extracción', 20],
 ];
 const DURACIONES = [30, 60, 90, 120, 150, 180, 210, 240];
+const DURACIONES_URGENCIA = [10, 15, 20, 30, 45, 60];
+const OTRO = '__otro';
+
+const Procedimientos = {
+    opciones(urgencia) {
+        return urgencia
+            ? `<optgroup label="Urgencias">${URGENCIAS.map(([n, m]) => `<option value="${esc(n)}">${esc(n)} · ${Fecha.duracion(m)}</option>`).join('')}</optgroup>`
+            : PROCEDIMIENTOS.map(([grupo, lista]) => `<optgroup label="${esc(grupo)}">${lista.map(([n, m]) =>
+                `<option value="${esc(n)}">${esc(n)} · ${Fecha.duracion(m)}</option>`).join('')}</optgroup>`).join('');
+    },
+    lista(urgencia) { return urgencia ? URGENCIAS : PROCEDIMIENTOS.flatMap(([, l]) => l); },
+    minutos(nombre, urgencia) { return this.lista(urgencia).find(([n]) => n === nombre)?.[1]; },
+    /** Ubica un motivo guardado en la lista; si no está, queda como "Otro" con su texto. */
+    identificar(motivo, urgencia) {
+        const texto = (motivo || '').replace(/^Urgencia:\s*/, '');
+        if (!texto) return { valor: '', otro: '' };
+        return this.lista(urgencia).some(([n]) => n === texto) ? { valor: texto, otro: '' } : { valor: OTRO, otro: motivo };
+    },
+};
 
 const CitasVista = {
     rango: 'proximas',
@@ -79,7 +103,7 @@ const CitasVista = {
                 <tr data-id="${c.id}" class="${c.pasada ? 'fila-pasada' : ''}">
                     <td><strong>${Fecha.hora12(c.hora)}</strong><small>hasta ${Fecha.hora12(c.horaFin)}</small></td>
                     <td><strong>${esc(c.pacienteNombre)}</strong><small>${esc(c.pacienteTelefono || 'Sin teléfono')}</small></td>
-                    <td>${esc(c.motivo || '—')}</td>
+                    <td>${c.urgente ? '<span class="badge badge--urgencia">Urgencia</span> ' : ''}${esc(c.motivo || '—')}</td>
                     <td>${esc(c.odontologoNombre || '—')}</td>
                     <td><span class="badge badge--${c.estado}">${c.estado}</span></td>
                     <td class="acciones">${this.botonesRapidos(c)}</td>
@@ -149,6 +173,7 @@ const CitasVista = {
                     <h4>${esc(c.pacienteNombre)}</h4>
                     <div>${Fecha.hora12(c.hora)} – ${Fecha.hora12(c.horaFin)} · ${esc(Fecha.larga(c.fecha))}</div>
                     <span class="badge badge--${c.estado}">${c.estado}</span>
+                    ${c.urgente ? '<span class="badge badge--urgencia">Urgencia · sobrecupo</span>' : ''}
                 </div>
             </div>
             ${aviso}
@@ -232,43 +257,53 @@ const CitasVista = {
 
     /* ---------- Formulario de alta / reprogramación ---------- */
     /**
-     * datos: { cita } para editar, o { fecha, hora, odontologoId, paciente, motivo, notas } para una nueva.
+     * datos: { cita } para editar, o { fecha, hora, odontologoId, paciente, motivo, notas, urgente } para una nueva.
+     * Una cita programada se agenda en los horarios libres; una urgencia se atiende como sobrecupo a la hora que llegue.
      */
     abrirFormulario(datos = {}) {
         if (!App.puede('gestion')) return toast('Tu rol no permite agendar citas.', 'info');
         const c = datos.cita;
+        const urgente = Boolean(c?.urgente ?? datos.urgente);
         const estado = {
             id: c?.id ?? null,
             paciente: c ? { id: c.pacienteId, nombreCompleto: c.pacienteNombre, telefono: c.pacienteTelefono } : datos.paciente ?? null,
             odontologoId: c?.odontologoId ?? datos.odontologoId ?? App.odontologos[0]?.id,
             fecha: c?.fecha ?? (datos.fecha && datos.fecha >= App.hoy ? datos.fecha : App.hoy),
             hora: c?.hora ?? datos.hora ?? null,
-            duracion: c?.duracionMinutos ?? datos.duracion ?? 30,
+            duracion: c?.duracionMinutos ?? datos.duracion ?? (urgente ? 15 : 30),
             motivo: c?.motivo ?? datos.motivo ?? '',
             notas: c?.notasRecepcion ?? datos.notas ?? '',
         };
 
-        const cuerpo = Modal.abrir(c ? 'Reprogramar / editar cita' : 'Nueva cita', `
+        const cuerpo = Modal.abrir(c ? 'Reprogramar / editar cita' : urgente ? 'Registrar urgencia' : 'Nueva cita', `
             <form id="form-cita" novalidate>
                 <p class="error-form" id="cita-error" hidden></p>
+                <div class="fila-campos">
+                    <label class="campo">
+                        <span class="campo__etiqueta">Tipo de cita <b class="req">*</b></span>
+                        <select name="tipo">
+                            <option value="normal">Cita programada</option>
+                            <option value="urgencia">Urgencia (sobrecupo)</option>
+                        </select>
+                    </label>
+                    <label class="campo">
+                        <span class="campo__etiqueta">Odontólogo <b class="req">*</b></span>
+                        <select name="odontologoId">${App.odontologos.map(o =>
+                            `<option value="${o.id}">${esc(o.nombreCompleto)}</option>`).join('')}</select>
+                    </label>
+                </div>
                 <div class="campo">
                     <span class="campo__etiqueta">Paciente <b class="req">*</b></span>
                     <div id="cita-paciente"></div>
                     <span class="campo__error" data-error="pacienteId"></span>
                 </div>
                 <label class="campo">
-                    <span class="campo__etiqueta">Motivo de la consulta <b class="req">*</b></span>
-                    <input type="text" name="motivo" maxlength="255" placeholder="Ej. Limpieza dental" required>
-                    <div class="sugerencias">${MOTIVOS_FRECUENTES.map(m => `<button type="button" class="chip" data-motivo="${esc(m.nombre)}"
-                        data-minutos="${m.minutos}">${esc(m.nombre)} · ${Fecha.duracion(m.minutos)}</button>`).join('')}</div>
+                    <span class="campo__etiqueta">Procedimiento <b class="req">*</b></span>
+                    <select name="procedimiento"></select>
+                    <input type="text" name="motivoOtro" maxlength="200" placeholder="Especifica el motivo" hidden>
                     <span class="campo__error" data-error="motivo"></span>
                 </label>
-                <div class="fila-campos fila-campos--3">
-                    <label class="campo">
-                        <span class="campo__etiqueta">Odontólogo <b class="req">*</b></span>
-                        <select name="odontologoId">${App.odontologos.map(o =>
-                            `<option value="${o.id}">${esc(o.nombreCompleto)}</option>`).join('')}</select>
-                    </label>
+                <div class="fila-campos">
                     <label class="campo">
                         <span class="campo__etiqueta">Fecha <b class="req">*</b></span>
                         <input type="date" name="fecha" min="${App.hoy}" required>
@@ -276,16 +311,22 @@ const CitasVista = {
                     </label>
                     <label class="campo">
                         <span class="campo__etiqueta">Duración <b class="req">*</b></span>
-                        <select name="duracionMinutos">${DURACIONES.map(d => `<option value="${d}">${Fecha.duracion(d)}</option>`).join('')}</select>
+                        <select name="duracionMinutos"></select>
                         <span class="campo__error" data-error="duracionMinutos"></span>
                     </label>
                 </div>
-                <div class="campo">
-                    <span class="campo__etiqueta">Hora <b class="req">*</b> <span class="campo__ayuda" id="cita-hora-ayuda"></span></span>
-                    <div id="cita-horas" class="selector-horas"></div>
+                <label class="campo" id="campo-hora">
+                    <span class="campo__etiqueta">Hora <b class="req">*</b></span>
+                    <select name="hora"></select>
+                    <span class="campo__ayuda" id="cita-hora-ayuda"></span>
                     <span class="campo__error" data-error="hora"></span>
-                    <span class="campo__ayuda">Verde: cabe completa · Rojo: ocupado · Ámbar: libre, pero no alcanza para la duración elegida</span>
-                </div>
+                </label>
+                <label class="campo" id="campo-hora-urgencia" hidden>
+                    <span class="campo__etiqueta">Hora de atención <b class="req">*</b></span>
+                    <input type="time" name="horaUrgencia" step="300">
+                    <span class="campo__error" data-error="horaUrgencia"></span>
+                </label>
+                <div id="cita-sobrecupo"></div>
                 <label class="campo">
                     <span class="campo__etiqueta">Notas de recepción</span>
                     <textarea name="notasRecepcion" maxlength="1000" placeholder="Indicaciones, referencias, etc. (opcional)"></textarea>
@@ -293,40 +334,16 @@ const CitasVista = {
                 ${c && c.estado === 'Confirmada' ? '<p class="aviso aviso--info">Si cambias la fecha, hora, duración u odontólogo, la cita regresará a <b>Programada</b> y deberá confirmarse de nuevo.</p>' : ''}
                 <div class="acciones-form">
                     <button type="button" class="btn btn--borde" data-cerrar>Cancelar</button>
-                    <button type="submit" class="btn btn--primario">${icono('check')}${c ? 'Guardar cambios' : 'Agendar cita'}</button>
+                    <button type="submit" class="btn btn--primario">${icono('check')}${c ? 'Guardar cambios' : 'Agendar'}</button>
                 </div>
             </form>`);
 
         const form = cuerpo.querySelector('#form-cita');
+        const esUrgencia = () => form.tipo.value === 'urgencia';
+        form.tipo.value = urgente ? 'urgencia' : 'normal';
         form.odontologoId.value = estado.odontologoId;
         form.fecha.value = estado.fecha;
-        if (!DURACIONES.includes(estado.duracion)) {
-            form.duracionMinutos.insertAdjacentHTML('beforeend', `<option value="${estado.duracion}">${Fecha.duracion(estado.duracion)}</option>`);
-        }
-        form.duracionMinutos.value = estado.duracion;
-        form.motivo.value = estado.motivo;
         form.notasRecepcion.value = estado.notas;
-
-        const borrador = () => ({
-            fecha: form.fecha.value, hora: estado.hora, odontologoId: Number(form.odontologoId.value),
-            duracion: Number(form.duracionMinutos.value),
-            paciente: estado.paciente, motivo: form.motivo.value, notas: form.notasRecepcion.value,
-        });
-
-        SelectorPaciente.montar(cuerpo.querySelector('#cita-paciente'), estado.paciente, {
-            alElegir: p => { estado.paciente = p; limpiarError('pacienteId'); },
-            alCrearNuevo: (nombre) => PacientesVista.abrirFormulario({ nombreCompleto: nombre }, nuevo =>
-                this.abrirFormulario(c ? { cita: { ...c, ...aCita(borrador(), nuevo) } } : { ...borrador(), paciente: nuevo })),
-        });
-
-        cuerpo.querySelectorAll('[data-motivo]').forEach(b => b.onclick = () => {
-            form.motivo.value = b.dataset.motivo;
-            limpiarError('motivo');
-            if (form.duracionMinutos.value !== b.dataset.minutos) {
-                form.duracionMinutos.value = b.dataset.minutos;
-                cargarHoras();
-            }
-        });
 
         const limpiarError = campo => {
             const el = cuerpo.querySelector(`[data-error=${campo}]`);
@@ -339,92 +356,197 @@ const CitasVista = {
             form.elements[campo]?.classList.add('invalido');
         });
 
+        /* Procedimientos y duraciones: listas que cambian según el tipo de cita. */
+        const pintarProcedimientos = (motivo) => {
+            const { valor, otro } = Procedimientos.identificar(motivo, esUrgencia());
+            form.procedimiento.innerHTML = '<option value="">Elige el procedimiento…</option>'
+                + Procedimientos.opciones(esUrgencia()) + `<option value="${OTRO}">Otro (especificar)</option>`;
+            form.procedimiento.value = valor;
+            form.motivoOtro.value = otro;
+            form.motivoOtro.hidden = valor !== OTRO;
+        };
+        const pintarDuraciones = (minutos) => {
+            const lista = esUrgencia() ? DURACIONES_URGENCIA : DURACIONES;
+            const opciones = lista.includes(minutos) ? lista : [...lista, minutos].sort((a, b) => a - b);
+            form.duracionMinutos.innerHTML = opciones.map(d => `<option value="${d}">${Fecha.duracion(d)}</option>`).join('');
+            form.duracionMinutos.value = lista.includes(minutos) || minutos ? minutos : lista[0];
+        };
+        const motivoElegido = () => {
+            if (form.procedimiento.value === OTRO) return form.motivoOtro.value.trim();
+            if (!form.procedimiento.value) return '';
+            return esUrgencia() ? `Urgencia: ${form.procedimiento.value}` : form.procedimiento.value;
+        };
+
+        const borrador = () => ({
+            fecha: form.fecha.value, hora: esUrgencia() ? form.horaUrgencia.value : form.hora.value,
+            odontologoId: Number(form.odontologoId.value), duracion: Number(form.duracionMinutos.value),
+            paciente: estado.paciente, motivo: motivoElegido(), notas: form.notasRecepcion.value, urgente: esUrgencia(),
+        });
+
+        SelectorPaciente.montar(cuerpo.querySelector('#cita-paciente'), estado.paciente, {
+            alElegir: p => { estado.paciente = p; limpiarError('pacienteId'); },
+            alCrearNuevo: (nombre) => PacientesVista.abrirFormulario({ nombreCompleto: nombre }, nuevo =>
+                this.abrirFormulario(c ? { cita: { ...c, ...aCita(borrador(), nuevo) } } : { ...borrador(), paciente: nuevo })),
+        });
+
+        /* ---- Cita programada: lista de horas libres en las que cabe la cita completa ---- */
         const cargarHoras = async () => {
-            const cont = cuerpo.querySelector('#cita-horas');
             const ayuda = cuerpo.querySelector('#cita-hora-ayuda');
+            const select = form.hora;
             limpiarError('fecha');
             limpiarError('hora');
             const fecha = form.fecha.value;
-            if (!fecha) { cont.innerHTML = '<p class="aviso aviso--info" style="grid-column:1/-1">Elige una fecha.</p>'; return; }
+            const sinOpciones = texto => {
+                select.innerHTML = `<option value="">${esc(texto)}</option>`;
+                select.disabled = true;
+                ayuda.textContent = '';
+            };
+            if (!fecha) return sinOpciones('Primero elige una fecha');
             if (fecha < App.hoy) {
                 form.fecha.classList.add('invalido');
-                cont.innerHTML = '<p class="aviso aviso--alerta" style="grid-column:1/-1">No se pueden agendar citas en fechas pasadas.</p>';
-                return;
+                return sinOpciones('No se pueden agendar citas en fechas pasadas');
             }
-            cont.innerHTML = '<div class="cargando" style="grid-column:1/-1"></div>';
+            select.disabled = true;
+            select.innerHTML = '<option value="">Buscando horarios libres…</option>';
             try {
                 const duracion = Number(form.duracionMinutos.value);
                 const disp = await Api.disponibilidad(fecha, form.odontologoId.value, estado.id, duracion);
+                if (esUrgencia()) return;
                 if (!disp.abierto) {
                     form.fecha.classList.add('invalido');
-                    cont.innerHTML = `<p class="aviso aviso--alerta" style="grid-column:1/-1">${esc(disp.mensaje)}</p>`;
-                    ayuda.textContent = '';
+                    return sinOpciones(disp.mensaje);
+                }
+                const libres = disp.espacios.filter(e => e.estado === 'DISPONIBLE');
+                if (!libres.length) {
+                    sinOpciones('No hay horarios libres este día');
+                    ayuda.innerHTML = 'Elige otra fecha. Si el paciente tiene una urgencia, cambia el tipo de cita a <b>Urgencia</b>.';
                     return;
                 }
-                if (!disp.espacios.some(e => e.estado === 'DISPONIBLE' && e.hora === estado.hora)) estado.hora = null;
-                const pintarAyuda = () => {
-                    const fin = estado.hora ? sumarMinutos(estado.hora, duracion) : null;
-                    ayuda.textContent = `· ${disp.disponibles} disponible(s) para ${Fecha.duracion(duracion)}`
-                        + (fin ? ` · la cita sería de ${Fecha.hora12(estado.hora)} a ${Fecha.hora12(fin)}` : '');
-                };
-                pintarAyuda();
-                cont.innerHTML = disp.disponibles === 0
-                    ? '<p class="aviso aviso--alerta" style="grid-column:1/-1">No quedan horarios libres este día. Elige otra fecha.</p>'
-                    : disp.espacios.map(e => {
-                        const clase = { OCUPADO: 'ocupada', PASADO: 'pasada', INSUFICIENTE: 'corta' }[e.estado]
-                            ?? (e.hora === estado.hora ? 'elegida' : '');
-                        const titulo = {
-                            OCUPADO: `Ocupado: ${e.pacienteNombre} (${e.citaInicio}–${e.citaFin})`,
-                            PASADO: 'Hora pasada',
-                            INSUFICIENTE: `Libre, pero ${Fecha.duracion(duracion)} no alcanzan antes de la siguiente cita o del cierre`,
-                        }[e.estado] ?? 'Disponible';
-                        return `<button type="button" class="${clase}" data-hora="${e.hora}" ${e.estado !== 'DISPONIBLE' ? 'disabled' : ''}
-                                    title="${esc(titulo)}">${e.hora}</button>`;
-                    }).join('');
-                cont.querySelectorAll('button:not(:disabled)').forEach(b => b.onclick = () => {
-                    estado.hora = b.dataset.hora;
-                    cont.querySelectorAll('.elegida').forEach(x => x.classList.remove('elegida'));
-                    b.classList.add('elegida');
-                    limpiarError('hora');
-                    pintarAyuda();
-                });
+                select.disabled = false;
+                select.innerHTML = '<option value="">Elige la hora…</option>' + libres.map(e =>
+                    `<option value="${e.hora}">${Fecha.hora12(e.hora)}  →  termina ${Fecha.hora12(sumarMinutos(e.hora, duracion))}</option>`).join('');
+                select.value = libres.some(e => e.hora === estado.hora) ? estado.hora : '';
+                ayuda.textContent = `${libres.length} horario(s) libre(s) para ${Fecha.duracion(duracion)} · el primero es a las ${Fecha.hora12(libres[0].hora)}`;
             } catch (err) {
-                cont.innerHTML = `<p class="aviso aviso--alerta" style="grid-column:1/-1">${esc(err.message)}</p>`;
+                sinOpciones('No se pudieron cargar los horarios');
+                ayuda.textContent = err.message;
             }
         };
-        form.fecha.onchange = cargarHoras;
-        form.odontologoId.onchange = cargarHoras;
-        form.duracionMinutos.onchange = cargarHoras;
-        form.motivo.oninput = () => limpiarError('motivo');
-        cargarHoras();
+
+        /* ---- Urgencia: hora libre dentro del horario de atención; avisa con quién se encima ---- */
+        const horarioDe = fecha => App.config.horarios[['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][Fecha.aDate(fecha).getDay()]];
+        const horaSugerida = fecha => {
+            const h = horarioDe(fecha);
+            if (!h) return '';
+            let hora = h.apertura;
+            if (fecha === App.hoy) {
+                const [hh, mm] = App.ahora.split('T')[1].split(':').map(Number);
+                const ahora = hh * 60 + Math.ceil(mm / 5) * 5;
+                const ahoraTxt = `${String(Math.floor(ahora / 60)).padStart(2, '0')}:${String(ahora % 60).padStart(2, '0')}`;
+                if (ahoraTxt > hora) hora = ahoraTxt;
+            }
+            return hora;
+        };
+        const revisarUrgencia = async () => {
+            const aviso = cuerpo.querySelector('#cita-sobrecupo');
+            limpiarError('fecha');
+            limpiarError('horaUrgencia');
+            const fecha = form.fecha.value;
+            const h = fecha && horarioDe(fecha);
+            form.horaUrgencia.min = h?.apertura || '';
+            form.horaUrgencia.max = h?.cierre || '';
+            if (!fecha || fecha < App.hoy) { aviso.innerHTML = '<p class="aviso aviso--alerta">Elige hoy o una fecha futura.</p>'; return; }
+            if (!h) { aviso.innerHTML = '<p class="aviso aviso--alerta">La clínica no atiende ese día.</p>'; return; }
+            const hora = form.horaUrgencia.value;
+            if (!hora) { aviso.innerHTML = ''; return; }
+            const fin = sumarMinutos(hora, Number(form.duracionMinutos.value));
+            if (hora < h.apertura || fin > h.cierre) {
+                aviso.innerHTML = `<p class="aviso aviso--alerta">La urgencia debe atenderse entre ${Fecha.hora12(h.apertura)} y ${Fecha.hora12(h.cierre)}.</p>`;
+                return;
+            }
+            try {
+                const disp = await Api.disponibilidad(fecha, form.odontologoId.value, estado.id);
+                const encimadas = new Map();
+                disp.espacios.forEach(e => {
+                    if (e.citaId && e.estadoCita !== 'Inasistencia' && e.citaInicio < fin && e.citaFin > hora) encimadas.set(e.citaId, e);
+                    (e.urgencias || []).forEach(u => { if (u.citaId !== estado.id && u.inicio < fin && u.fin > hora) encimadas.set(u.citaId, { ...u, citaInicio: u.inicio, citaFin: u.fin, urgencia: true }); });
+                });
+                aviso.innerHTML = encimadas.size
+                    ? `<p class="aviso aviso--urgencia">${icono('alerta')}<span><b>Sobrecupo:</b> se atiende de ${Fecha.hora12(hora)} a ${Fecha.hora12(fin)} y se encima con
+                        ${[...encimadas.values()].map(e => `${esc(e.pacienteNombre)} (${Fecha.hora12(e.citaInicio)} – ${Fecha.hora12(e.citaFin)})${e.urgencia ? ', otra urgencia' : ''}`).join('; ')}.
+                        Avísale que espere unos minutos.</span></p>`
+                    : `<p class="aviso aviso--info">El odontólogo está libre de ${Fecha.hora12(hora)} a ${Fecha.hora12(fin)}: la urgencia se atiende sin retrasar a nadie.</p>`;
+            } catch (err) {
+                aviso.innerHTML = `<p class="aviso aviso--alerta">${esc(err.message)}</p>`;
+            }
+        };
+
+        const actualizar = () => (esUrgencia() ? revisarUrgencia() : cargarHoras());
+        const aplicarTipo = (motivo, duracion) => {
+            const urg = esUrgencia();
+            cuerpo.querySelector('#campo-hora').hidden = urg;
+            cuerpo.querySelector('#campo-hora-urgencia').hidden = !urg;
+            if (!urg) cuerpo.querySelector('#cita-sobrecupo').innerHTML = '';
+            document.getElementById('modal-titulo').textContent = c ? 'Reprogramar / editar cita' : urg ? 'Registrar urgencia' : 'Nueva cita';
+            pintarProcedimientos(motivo);
+            pintarDuraciones(duracion);
+            if (urg && !form.horaUrgencia.value) form.horaUrgencia.value = estado.hora && urgente ? estado.hora : horaSugerida(form.fecha.value);
+            actualizar();
+        };
+
+        form.tipo.onchange = () => aplicarTipo('', esUrgencia() ? 15 : 30);
+        form.procedimiento.onchange = () => {
+            limpiarError('motivo');
+            form.motivoOtro.hidden = form.procedimiento.value !== OTRO;
+            if (form.procedimiento.value === OTRO) form.motivoOtro.focus();
+            const minutos = Procedimientos.minutos(form.procedimiento.value, esUrgencia());
+            if (minutos && Number(form.duracionMinutos.value) !== minutos) {
+                pintarDuraciones(minutos);
+                actualizar();
+            }
+        };
+        form.motivoOtro.oninput = () => limpiarError('motivo');
+        form.fecha.onchange = () => {
+            if (esUrgencia()) form.horaUrgencia.value = horaSugerida(form.fecha.value);
+            actualizar();
+        };
+        form.odontologoId.onchange = actualizar;
+        form.duracionMinutos.onchange = actualizar;
+        form.hora.onchange = () => limpiarError('hora');
+        form.horaUrgencia.onchange = revisarUrgencia;
+        aplicarTipo(estado.motivo, estado.duracion);
 
         form.onsubmit = async e => {
             e.preventDefault();
             const error = cuerpo.querySelector('#cita-error');
             error.hidden = true;
+            const urg = esUrgencia();
+            const hora = urg ? form.horaUrgencia.value : form.hora.value;
+            const motivo = motivoElegido();
             const errores = {};
             if (!estado.paciente) errores.pacienteId = 'Selecciona o registra un paciente.';
             if (!form.fecha.value) errores.fecha = 'Elige una fecha.';
             else if (form.fecha.value < App.hoy) errores.fecha = 'No se pueden agendar citas en fechas pasadas.';
-            if (!estado.hora) errores.hora = 'Elige un horario disponible (en verde).';
-            if (form.motivo.value.trim().length < 3) errores.motivo = 'Describe el motivo (mínimo 3 caracteres).';
+            if (!hora) errores[urg ? 'horaUrgencia' : 'hora'] = urg ? 'Indica la hora de atención.' : 'Elige una hora de la lista.';
+            if (motivo.length < 3) errores.motivo = form.procedimiento.value === OTRO ? 'Describe el motivo (mínimo 3 caracteres).' : 'Elige el procedimiento.';
             if (Object.keys(errores).length) return mostrarErrores(errores);
 
             const datosCita = {
                 pacienteId: estado.paciente.id,
                 odontologoId: Number(form.odontologoId.value),
                 fecha: form.fecha.value,
-                hora: estado.hora,
+                hora,
                 duracionMinutos: Number(form.duracionMinutos.value),
-                motivo: form.motivo.value.trim(),
+                motivo,
                 notasRecepcion: form.notasRecepcion.value.trim(),
+                urgente: urg,
             };
             const boton = form.querySelector('button[type=submit]');
             boton.disabled = true;
             try {
                 const guardada = estado.id ? await Api.actualizarCita(estado.id, datosCita) : await Api.crearCita(datosCita);
                 Modal.cerrar();
-                toast(`${estado.id ? 'Cita actualizada' : 'Cita agendada'}: ${guardada.pacienteNombre}, ${Fecha.larga(guardada.fecha)} a las ${Fecha.hora12(guardada.hora)}`);
+                toast(`${estado.id ? 'Cita actualizada' : urg ? 'Urgencia registrada' : 'Cita agendada'}: ${guardada.pacienteNombre}, ${Fecha.larga(guardada.fecha)} a las ${Fecha.hora12(guardada.hora)}`);
                 Agenda.dia = guardada.fecha;
                 Agenda.mes = guardada.fecha.slice(0, 8) + '01';
                 App.refrescar();
@@ -432,18 +554,19 @@ const CitasVista = {
                 error.textContent = err.message;
                 error.hidden = false;
                 mostrarErrores(err.campos);
-                if (err.status === 409 || err.status === 422) cargarHoras();
+                if (err.status === 409 || err.status === 422) actualizar();
             } finally {
                 boton.disabled = false;
             }
         };
-    },
+    }
 };
 
 /** Combina un borrador del formulario con un paciente recién creado, en forma de cita para reabrir la edición. */
 function aCita(b, paciente) {
     return {
         fecha: b.fecha, hora: b.hora, odontologoId: b.odontologoId, duracionMinutos: b.duracion, motivo: b.motivo, notasRecepcion: b.notas,
+        urgente: b.urgente,
         pacienteId: paciente.id, pacienteNombre: paciente.nombreCompleto, pacienteTelefono: paciente.telefono,
     };
 }

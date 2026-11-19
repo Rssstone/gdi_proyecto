@@ -20,6 +20,7 @@ const PacientesVista = {
                         <td>${esc(p.telefono || '—')}</td>
                         <td>${esc(p.email || '—')}</td>
                         <td class="acciones">
+                            <button class="btn btn--suave btn--chico" data-accion="expediente">${icono('diente')}Expediente</button>
                             <button class="btn-icono" data-accion="historial" title="Ver citas">${icono('lista')}</button>
                             ${gestion ? `<button class="btn-icono" data-accion="editar" title="Editar datos">${icono('editar')}</button>
                             <button class="btn btn--suave btn--chico" data-accion="agendar">${icono('calendario')}Agendar</button>` : ''}
@@ -31,6 +32,7 @@ const PacientesVista = {
                 if (accion === 'agendar') CitasVista.abrirFormulario({ paciente: p, fecha: App.hoy, odontologoId: Agenda.odontologoId });
                 if (accion === 'editar') this.abrirFormulario(p, () => App.refrescar());
                 if (accion === 'historial') this.verHistorial(p);
+                if (accion === 'expediente') Expediente.abrir(p);
             });
         } catch (err) {
             cont.innerHTML = `<p class="error-form">${esc(err.message)}</p>`;

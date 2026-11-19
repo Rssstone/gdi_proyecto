@@ -2,9 +2,11 @@
 
 // Servido por nginx (Docker, puerto 80) o por el mismo backend: rutas relativas.
 // Abierto como archivo o con otro servidor de desarrollo (p. ej. Live Server): backend local en 8080.
-const API_BASE = location.protocol.startsWith('http') && ['', '80', '443', '8080'].includes(location.port)
-    ? '/api'
-    : 'http://localhost:8080/api';
+// En la nube se define window.GDI_API_URL en js/config.js con la IP de la máquina virtual de Azure.
+const API_BASE = window.GDI_API_URL
+    || (location.protocol.startsWith('http') && ['', '80', '443', '8080'].includes(location.port)
+        ? '/api'
+        : 'http://localhost:8080/api');
 
 class ErrorApi extends Error {
     constructor(mensaje, status, campos) {
@@ -14,7 +16,7 @@ class ErrorApi extends Error {
     }
 }
 
-async function peticion(ruta, { metodo = 'GET', cuerpo, params } = {}) {
+async function peticion(ruta, { metodo = 'GET', cuerpo, params, formulario } = {}) {
     const url = new URL(API_BASE + ruta, location.href);
     Object.entries(params || {}).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v); });
 
@@ -23,7 +25,8 @@ async function peticion(ruta, { metodo = 'GET', cuerpo, params } = {}) {
         res = await fetch(url, {
             method: metodo,
             headers: cuerpo ? { 'Content-Type': 'application/json' } : {},
-            body: cuerpo ? JSON.stringify(cuerpo) : undefined,
+            // Los archivos viajan como multipart/form-data (el navegador pone el encabezado).
+            body: formulario ?? (cuerpo ? JSON.stringify(cuerpo) : undefined),
         });
     } catch {
         throw new ErrorApi('No hay conexión con el servidor. Verifica que el backend esté encendido.', 0);
@@ -53,4 +56,19 @@ const Api = {
     pacientes: (q) => peticion('/pacientes', { params: { q } }),
     crearPaciente: (datos) => peticion('/pacientes', { metodo: 'POST', cuerpo: datos }),
     actualizarPaciente: (id, datos) => peticion(`/pacientes/${id}`, { metodo: 'PUT', cuerpo: datos }),
+
+    expediente: (pacienteId) => peticion(`/pacientes/${pacienteId}/expediente`),
+    guardarExpediente: (pacienteId, datos) => peticion(`/pacientes/${pacienteId}/expediente`, { metodo: 'PUT', cuerpo: datos }),
+    guardarDiente: (pacienteId, numero, datos) =>
+        peticion(`/pacientes/${pacienteId}/odontograma/${numero}`, { metodo: 'PUT', cuerpo: datos }),
+
+    estudios: (pacienteId) => peticion(`/pacientes/${pacienteId}/estudios`),
+    subirEstudio: (pacienteId, formData) => peticion(`/pacientes/${pacienteId}/estudios`, { metodo: 'POST', formulario: formData }),
+    urlEstudio: (id) => new URL(`${API_BASE}/estudios/${id}/archivo`, location.href).href,
+    eliminarEstudio: (id) => peticion(`/estudios/${id}`, { metodo: 'DELETE' }),
+
+    fichas: (pacienteId) => peticion('/fichas-tecnicas', { params: { pacienteId } }),
+    crearFicha: (datos) => peticion('/fichas-tecnicas', { metodo: 'POST', cuerpo: datos }),
+    actualizarFicha: (id, datos) => peticion(`/fichas-tecnicas/${id}`, { metodo: 'PUT', cuerpo: datos }),
+    eliminarFicha: (id) => peticion(`/fichas-tecnicas/${id}`, { metodo: 'DELETE' }),
 };
