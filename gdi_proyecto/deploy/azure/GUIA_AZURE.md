@@ -113,6 +113,7 @@ en su laptop; **no hay que registrar la IP de nadie**.
 
 | Síntoma | Solución |
 |---|---|
+| Las dos VMs muestran la misma IP privada (por ejemplo `172.16.0.4`) | Quedaron en redes virtuales distintas. En la VM de MySQL abre el 3306 **solo** para la IP pública del backend (regla de entrada con origen = esa IP), corre `sudo DB_RED=IP-PUBLICA-BACKEND bash deploy/azure/instalar-mysql.sh` y en el backend usa la IP **pública** de MySQL. |
 | El script del backend dice "No hay conexión con MySQL" | Las VMs no están en la misma red virtual, la IP privada es incorrecta o MySQL está apagado (`sudo systemctl status mysql` en la VM de MySQL). |
 | *"policy violation"* al crear una VM | La región no está permitida: usa **Chile Central** u otra de la lista de la directiva. |
 | La página dice "No hay conexión con el servidor" | Falta la regla del puerto **8080** en la VM del backend, la VM está apagada o `config.js` tiene otra dirección. |

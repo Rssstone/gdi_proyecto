@@ -10,7 +10,9 @@ set -euo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/../.." && pwd)"
 CONFIG=/etc/gdi/mysql.env
-RED="${DB_RED:-10.%}"   # direcciones privadas de la red virtual de Azure
+# Quién puede conectarse: por omisión, la red privada de esta VM (ej. 10.0.% o 172.16.%).
+# Si el backend está en otra red virtual, se pasa su IP pública:  sudo DB_RED=IP-DEL-BACKEND bash ...
+RED="${DB_RED:-$(hostname -I | awk '{print $1}' | cut -d. -f1-2).%}"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "Ejecuta el script con sudo: sudo bash deploy/azure/instalar-mysql.sh" >&2
@@ -48,8 +50,8 @@ DB_USER="${DB_USER:-gdi}"
 DB_PASS="${DB_PASS:-$(openssl rand -base64 18 | tr -d '/+=')}"
 mysql -u root <<SQL
 CREATE DATABASE IF NOT EXISTS gdi_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '$DB_USER'@'$RED' IDENTIFIED BY '$DB_PASS';
-ALTER USER '$DB_USER'@'$RED' IDENTIFIED BY '$DB_PASS';
+CREATE USER IF NOT EXISTS '$DB_USER'@'$RED' IDENTIFIED BY '$DB_PASS' REQUIRE SSL;
+ALTER USER '$DB_USER'@'$RED' IDENTIFIED BY '$DB_PASS' REQUIRE SSL;
 GRANT ALL PRIVILEGES ON gdi_db.* TO '$DB_USER'@'$RED';
 FLUSH PRIVILEGES;
 SQL
@@ -77,7 +79,7 @@ chmod +x /etc/cron.daily/gdi-respaldo
 IP_PRIVADA=$(hostname -I | awk '{print $1}')
 echo
 echo "Listo. MySQL está corriendo. Anota estos datos para instalar el backend en la otra VM:"
-echo "   IP privada de esta VM : $IP_PRIVADA"
+echo "   IP privada de esta VM : $IP_PRIVADA   (acepta conexiones desde: $RED)"
 echo "   Usuario               : $DB_USER"
 echo "   Contraseña            : $DB_PASS"
 echo "(Se pueden volver a consultar con:  sudo cat $CONFIG  y  hostname -I)"
