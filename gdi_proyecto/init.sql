@@ -66,10 +66,26 @@ CREATE TABLE odontogramas (
     expediente_id INT NOT NULL,
     numero_diente INT NOT NULL,             -- numeración FDI (11 a 48)
     estado_diente VARCHAR(100),
-    superficies VARCHAR(20),                -- caras afectadas: O, M, D, V, L
+    superficies VARCHAR(20),                -- hallazgos por cara: "O:C,M:R" (C caries, R restaurado, F fractura)
     descripcion TEXT,
     UNIQUE KEY uk_odontograma_diente (expediente_id, numero_diente),
     FOREIGN KEY (expediente_id) REFERENCES expedientes(id) ON DELETE CASCADE
+);
+
+-- Historial del odontograma: cada cambio de una pieza con su estado anterior y el nuevo.
+CREATE TABLE odontograma_historial (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    expediente_id INT NOT NULL,
+    numero_diente INT NOT NULL,
+    estado_anterior VARCHAR(30),
+    caras_anteriores VARCHAR(20),
+    estado_nuevo VARCHAR(30),
+    caras_nuevas VARCHAR(20),
+    descripcion VARCHAR(500),
+    usuario_id INT,
+    fecha DATETIME NOT NULL,
+    FOREIGN KEY (expediente_id) REFERENCES expedientes(id) ON DELETE CASCADE,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
 );
 
 -- Módulo técnico: especificaciones de coronas, puentes y prótesis que toma el odontólogo.
@@ -168,8 +184,8 @@ INSERT INTO expedientes (paciente_id, antecedentes_personales, antecedentes_fami
 (1, 'Hipertensión controlada', 'Diabetes (padre)', 'Penicilina');
 
 INSERT INTO odontogramas (expediente_id, numero_diente, estado_diente, superficies, descripcion) VALUES
-(1, 16, 'Caries', 'O,M', 'Caries oclusal y mesial'),
-(1, 26, 'Restaurado', 'O', 'Resina'),
+(1, 16, 'Sano', 'O:C,M:C', 'Caries oclusal y mesial'),
+(1, 26, 'Sano', 'O:R', 'Resina'),
 (1, 36, 'Endodoncia', NULL, 'Tratamiento de conductos terminado'),
 (1, 46, 'Ausente', NULL, 'Extraído hace 2 años'),
 (1, 11, 'Corona', NULL, 'Corona de zirconia');

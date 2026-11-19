@@ -57,7 +57,8 @@ const Api = {
     crearPaciente: (datos) => peticion('/pacientes', { metodo: 'POST', cuerpo: datos }),
     actualizarPaciente: (id, datos) => peticion(`/pacientes/${id}`, { metodo: 'PUT', cuerpo: datos }),
 
-    expediente: (pacienteId) => peticion(`/pacientes/${pacienteId}/expediente`),
+    expediente: (pacienteId, fecha) => peticion(`/pacientes/${pacienteId}/expediente`, { params: { fecha } }),
+    historialOdontograma: (pacienteId) => peticion(`/pacientes/${pacienteId}/odontograma/historial`),
     guardarExpediente: (pacienteId, datos) => peticion(`/pacientes/${pacienteId}/expediente`, { metodo: 'PUT', cuerpo: datos }),
     guardarDiente: (pacienteId, numero, datos) =>
         peticion(`/pacientes/${pacienteId}/odontograma/${numero}`, { metodo: 'PUT', cuerpo: datos }),

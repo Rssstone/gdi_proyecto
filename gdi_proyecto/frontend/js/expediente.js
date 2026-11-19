@@ -1,17 +1,18 @@
-/* Expediente clínico: odontograma interactivo, antecedentes, fichas técnicas y estudios del paciente. */
+/* Expediente clínico: odontograma interactivo con historial, antecedentes, fichas técnicas y estudios.
+   Solo lo ven el odontólogo y el administrador (información clínica confidencial). */
 
-/* Estados del diente. color: relleno de la cara (los que se marcan por superficie). */
-const ESTADOS_DIENTE = {
-    Sano:       { nombre: 'Sano' },
-    Caries:     { nombre: 'Caries', color: '#d63b3b', caras: true },
-    Restaurado: { nombre: 'Restaurado (resina / amalgama)', color: '#2463b8', caras: true },
-    Fractura:   { nombre: 'Fractura', color: '#e8590c', caras: true },
-    Corona:     { nombre: 'Corona' },
-    Endodoncia: { nombre: 'Endodoncia' },
-    Implante:   { nombre: 'Implante' },
-    Ortodoncia: { nombre: 'Bracket de ortodoncia' },
-    PorExtraer: { nombre: 'Por extraer' },
-    Ausente:    { nombre: 'Ausente' },
+/* Hallazgos del odontograma. tipo 'cara': se marca en una cara del cuadro; 'pieza': aplica al diente completo. */
+const HALLAZGOS = {
+    Caries:     { nombre: 'Caries', tipo: 'cara', color: '#d63b3b', ayuda: 'Por tratar' },
+    Restaurado: { nombre: 'Restaurado', tipo: 'cara', color: '#2463b8', ayuda: 'Resina o amalgama hecha' },
+    Fractura:   { nombre: 'Fractura', tipo: 'cara', color: '#e8590c', ayuda: 'Pieza fracturada' },
+    Corona:     { nombre: 'Corona', tipo: 'pieza', ayuda: 'Círculo azul' },
+    Endodoncia: { nombre: 'Endodoncia', tipo: 'pieza', ayuda: 'Línea roja en la raíz' },
+    Implante:   { nombre: 'Implante', tipo: 'pieza', ayuda: 'Tornillo en lugar de raíz' },
+    Ortodoncia: { nombre: 'Bracket', tipo: 'pieza', ayuda: 'Bracket verde' },
+    PorExtraer: { nombre: 'Por extraer', tipo: 'pieza', ayuda: 'X roja' },
+    Ausente:    { nombre: 'Ausente', tipo: 'pieza', ayuda: 'X azul, pieza clara' },
+    Sano:       { nombre: 'Borrar', tipo: 'borrar', ayuda: 'Quita lo marcado' },
 };
 const CARAS = { O: 'Oclusal / incisal', M: 'Mesial', D: 'Distal', V: 'Vestibular', L: 'Lingual / palatino' };
 const PIEZAS = ['', 'Incisivo central', 'Incisivo lateral', 'Canino', 'Primer premolar', 'Segundo premolar',
@@ -22,20 +23,37 @@ function nombreDiente(n) {
     return `${PIEZAS[n % 10]} ${CUADRANTES[Math.floor(n / 10)]}`;
 }
 
+/** Resumen legible de una pieza, por ejemplo "Endodoncia · Caries (O) · Restaurado (M)". */
+function resumenPieza(d) {
+    if (!d || (d.estado === 'Sano' && !Object.keys(d.caras || {}).length)) return 'Sano';
+    const partes = d.estado !== 'Sano' ? [HALLAZGOS[d.estado].nombre] : [];
+    const porHallazgo = {};
+    Object.entries(d.caras || {}).forEach(([cara, h]) => (porHallazgo[h] = porHallazgo[h] || []).push(cara));
+    Object.entries(porHallazgo).forEach(([h, caras]) => partes.push(`${HALLAZGOS[h].nombre} (${caras.join(', ')})`));
+    return partes.join(' · ');
+}
+
 const Expediente = {
     paciente: null,
     datos: null,
     pestana: 'odontograma',
     elegido: null,
+    herramienta: 'Caries',
+    historial: [],
+    fechaVista: '',          // '' = odontograma actual; AAAA-MM-DD = cómo estaba ese día
+    dientesVista: null,
 
     /** Abre el expediente del paciente en la pestaña indicada. */
     async abrir(paciente, pestana = 'odontograma') {
+        if (!App.puede('clinico')) return toast('El expediente clínico solo lo consulta el odontólogo.', 'info');
         this.paciente = paciente;
         this.pestana = pestana;
         this.elegido = null;
+        this.fechaVista = '';
+        this.dientesVista = null;
         const cuerpo = Modal.abrir(`Expediente clínico`, '<div class="cargando"></div>', { grande: true });
         try {
-            this.datos = await Api.expediente(paciente.id);
+            [this.datos, this.historial] = await Promise.all([Api.expediente(paciente.id), Api.historialOdontograma(paciente.id)]);
         } catch (err) {
             cuerpo.innerHTML = `<p class="error-form">${esc(err.message)}</p>`;
             return;
@@ -75,96 +93,157 @@ const Expediente = {
 
     /* ================= Odontograma ================= */
     pintarOdontograma(cont) {
-        const clinico = App.puede('clinico');
+        const fechas = [...new Set(this.historial.map(c => c.fecha.slice(0, 10)))];
+        const inicial = fechas.length ? Fecha.sumarDias(fechas[fechas.length - 1], -1) : null;
+        const grupo = (tipo, titulo) => `<div class="odo-grupo"><span class="odo-grupo__titulo">${titulo}</span><div class="odo-grupo__botones">
+            ${Object.entries(HALLAZGOS).filter(([, h]) => h.tipo === tipo).map(([k, h]) =>
+                `<button type="button" class="odo-herr${k === this.herramienta ? ' activo' : ''}" data-herr="${k}" title="${esc(h.ayuda)}">
+                    ${Odontograma.icono(k)}<span>${esc(h.nombre)}</span></button>`).join('')}</div></div>`;
         cont.innerHTML = `
-            <div class="odontograma">${Odontograma.svg(this.datos.dientes)}</div>
-            ${Odontograma.leyenda()}
+            <div class="odo-barra" id="odo-barra">
+                ${grupo('cara', '1 · Por cara: elige y da clic en la cara del cuadro')}
+                ${grupo('pieza', '2 · Pieza completa: elige y da clic en el diente')}
+                ${grupo('borrar', '3 · Corregir')}
+            </div>
+            <p class="odo-convencion"><b>Rojo</b> = por tratar · <b>Azul</b> = tratamiento realizado · <b>Naranja</b> = fractura.
+                Da clic otra vez con la misma herramienta para quitarlo.</p>
+            <div class="odo-vista">
+                <label class="select-compacto"><span>${icono('reloj')}</span>
+                    <select id="odo-fecha" aria-label="Ver odontograma">
+                        <option value="">Odontograma actual</option>
+                        ${inicial ? `<option value="${inicial}">Inicial (antes del primer cambio)</option>` : ''}
+                        ${fechas.map(f => `<option value="${f}">Como estaba el ${esc(Fecha.corta(f))}</option>`).join('')}
+                    </select></label>
+                <span id="odo-aviso-vista"></span>
+            </div>
+            <div class="odontograma" id="odo-dibujo"></div>
             <div class="odontograma-editor">
                 <div id="editor-diente" class="editor-diente"></div>
                 <div>
-                    <span class="campo__etiqueta">Hallazgos registrados</span>
-                    <ul class="hallazgos" id="lista-hallazgos"></ul>
+                    <span class="campo__etiqueta">Historial de cambios</span>
+                    <ul class="hallazgos" id="lista-historial"></ul>
                 </div>
             </div>`;
-        cont.querySelectorAll('.diente').forEach(g => g.onclick = ev => {
-            this.elegir(Number(g.dataset.diente), ev.target.dataset.cara);
+        cont.querySelectorAll('[data-herr]').forEach(b => b.onclick = () => {
+            this.herramienta = b.dataset.herr;
+            cont.querySelectorAll('[data-herr]').forEach(x => x.classList.toggle('activo', x === b));
         });
-        const lista = cont.querySelector('#lista-hallazgos');
-        lista.innerHTML = this.datos.dientes.length
-            ? this.datos.dientes.map(d => `<li data-diente="${d.numero}"><b>${d.numero}</b><span>${esc(ESTADOS_DIENTE[d.estado]?.nombre || d.estado)}
-                ${d.superficies.length ? ` · ${d.superficies.join(', ')}` : ''}<small>${esc(nombreDiente(d.numero))}${d.descripcion ? ` — ${esc(d.descripcion)}` : ''}</small></span></li>`).join('')
-            : `<li style="cursor:default">Sin hallazgos: todas las piezas están sanas.</li>`;
-        lista.querySelectorAll('li[data-diente]').forEach(li => li.onclick = () => this.elegir(Number(li.dataset.diente)));
-        if (this.elegido) this.elegir(this.elegido);
-        else cont.querySelector('#editor-diente').innerHTML = `<h5>Selecciona una pieza</h5>
-            <p>${clinico ? 'Da clic en un diente (o en una de sus caras) para registrar su estado.' : 'Da clic en un diente para ver su detalle. Solo el odontólogo puede modificarlo.'}</p>`;
+        const select = cont.querySelector('#odo-fecha');
+        select.value = this.fechaVista;
+        select.onchange = () => this.verFecha(select.value);
+        this.pintarDibujo();
+        this.pintarHistorial();
+        this.pintarDetalle();
     },
 
-    elegir(numero, cara) {
+    /** Dientes que se dibujan: los actuales o los de la fecha elegida. */
+    dientesMostrados() {
+        return this.fechaVista ? this.dientesVista || [] : this.datos.dientes;
+    },
+
+    pintarDibujo() {
+        const dibujo = document.getElementById('odo-dibujo');
+        if (!dibujo) return;
+        dibujo.innerHTML = Odontograma.svg(this.dientesMostrados());
+        dibujo.classList.toggle('odontograma--pasado', Boolean(this.fechaVista));
+        dibujo.querySelectorAll('.diente').forEach(g => g.onclick = ev => this.clicDiente(Number(g.dataset.diente), ev.target.dataset.cara));
+        if (this.elegido) dibujo.querySelector(`.diente[data-diente="${this.elegido}"]`)?.classList.add('elegido');
+        document.getElementById('odo-barra')?.classList.toggle('odo-barra--inactiva', Boolean(this.fechaVista));
+        const aviso = document.getElementById('odo-aviso-vista');
+        if (aviso) aviso.innerHTML = this.fechaVista
+            ? `<span class="badge badge--entrega-vencida">Solo consulta · para modificar elige "Odontograma actual"</span>` : '';
+    },
+
+    async verFecha(fecha) {
+        this.fechaVista = fecha;
+        if (fecha) {
+            try {
+                this.dientesVista = (await Api.expediente(this.paciente.id, fecha)).dientes;
+            } catch (err) {
+                return toast(err.message, 'error');
+            }
+        }
+        this.pintarDibujo();
+        this.pintarDetalle();
+    },
+
+    pintarHistorial() {
+        const lista = document.getElementById('lista-historial');
+        if (!lista) return;
+        lista.innerHTML = this.historial.length
+            ? this.historial.map(c => `<li data-diente="${c.numero}"><b>${c.numero}</b><span>${esc(c.antes)} → <strong>${esc(c.despues)}</strong>
+                <small>${esc(Fecha.corta(c.fecha.slice(0, 10)))} ${esc(Fecha.hora12(c.fecha.slice(11, 16)))}${c.usuarioNombre ? ` · ${esc(c.usuarioNombre)}` : ''}${c.descripcion ? ` — ${esc(c.descripcion)}` : ''}</small></span></li>`).join('')
+            : '<li style="cursor:default">Todavía no hay cambios registrados.</li>';
+        lista.querySelectorAll('li[data-diente]').forEach(li => li.onclick = () => { this.elegido = Number(li.dataset.diente); this.pintarDibujo(); this.pintarDetalle(); });
+    },
+
+    /** Clic en el dibujo: aplica la herramienta elegida a la cara o a la pieza y lo guarda de inmediato. */
+    async clicDiente(numero, cara) {
         this.elegido = numero;
-        document.querySelectorAll('.odontograma .diente').forEach(g => g.classList.toggle('elegido', Number(g.dataset.diente) === numero));
+        if (this.fechaVista) { this.pintarDibujo(); this.pintarDetalle(); return toast('Estás viendo una fecha anterior: elige "Odontograma actual" para modificar.', 'info'); }
+        const actual = this.datos.dientes.find(d => d.numero === numero) || { numero, estado: 'Sano', caras: {}, descripcion: null };
+        const nuevo = { estado: actual.estado, caras: { ...actual.caras } };
+        const h = this.herramienta;
+        const tipo = HALLAZGOS[h].tipo;
+        if (tipo === 'cara') {
+            if (!cara) { this.pintarDibujo(); this.pintarDetalle(); return toast(`Para marcar ${HALLAZGOS[h].nombre.toLowerCase()} da clic en una de las 5 caras del cuadro.`, 'info'); }
+            if (actual.estado === 'Ausente') return toast(`La pieza ${numero} está marcada como ausente.`, 'info');
+            if (nuevo.caras[cara] === h) delete nuevo.caras[cara]; else nuevo.caras[cara] = h;
+        } else if (tipo === 'pieza') {
+            nuevo.estado = actual.estado === h ? 'Sano' : h;
+            if (nuevo.estado === 'Ausente') nuevo.caras = {};
+        } else if (cara && nuevo.caras[cara]) {
+            delete nuevo.caras[cara];
+        } else {
+            nuevo.estado = 'Sano';
+            nuevo.caras = {};
+        }
+        if (resumenPieza(nuevo) === resumenPieza(actual)) { this.pintarDibujo(); this.pintarDetalle(); return; }
+        await this.guardarPieza(numero, nuevo, actual.descripcion);
+    },
+
+    async guardarPieza(numero, pieza, descripcion) {
+        try {
+            const guardado = await Api.guardarDiente(this.paciente.id, numero,
+                { estado: pieza.estado, caras: pieza.caras, descripcion, usuarioId: App.usuario.id });
+            this.datos.dientes = this.datos.dientes.filter(d => d.numero !== numero);
+            if (guardado.estado !== 'Sano' || Object.keys(guardado.caras || {}).length || guardado.descripcion) this.datos.dientes.push(guardado);
+            this.datos.dientes.sort((a, b) => a.numero - b.numero);
+            this.historial = await Api.historialOdontograma(this.paciente.id);
+            toast(`Pieza ${numero}: ${resumenPieza(guardado)}.`);
+            this.pintarOdontograma(document.getElementById('exp-contenido'));
+        } catch (err) {
+            toast(err.message, 'error');
+        }
+    },
+
+    /** Panel de la pieza elegida: qué tiene, su nota y sus cambios. */
+    pintarDetalle() {
         const editor = document.getElementById('editor-diente');
-        const actual = this.datos.dientes.find(d => d.numero === numero) || { numero, estado: 'Sano', superficies: [], descripcion: '' };
-        const clinico = App.puede('clinico');
-        if (!clinico) {
-            editor.innerHTML = `<h5>Pieza ${numero}</h5><p>${esc(nombreDiente(numero))}</p>
-                <div class="detalle__dato"><small>Estado</small><strong>${esc(ESTADOS_DIENTE[actual.estado]?.nombre || actual.estado)}</strong></div>
-                ${actual.superficies.length ? `<div class="detalle__dato" style="margin-top:8px"><small>Caras</small><strong>${actual.superficies.map(c => CARAS[c]).join(', ')}</strong></div>` : ''}
-                ${actual.descripcion ? `<p class="detalle__notas">${esc(actual.descripcion)}</p>` : ''}`;
+        if (!editor) return;
+        const numero = this.elegido;
+        if (!numero) {
+            editor.innerHTML = `<h5>Cómo se usa</h5>
+                <p>1. Elige arriba qué quieres marcar (por ejemplo <b>Caries</b>).<br>
+                2. Da clic en la cara del diente o en el diente completo: se pinta y se guarda solo.<br>
+                3. Da clic en un diente para escribir una nota o ver sus cambios.</p>`;
             return;
         }
-        // Si se dio clic en una cara de una pieza sana, se propone marcarla con caries.
-        const caras = new Set(actual.superficies);
-        let estadoInicial = actual.estado;
-        if (cara && (actual.estado === 'Sano' || ESTADOS_DIENTE[actual.estado].caras)) {
-            if (actual.estado === 'Sano') estadoInicial = 'Caries';
-            caras.add(cara);
-        }
-        editor.innerHTML = `<form id="form-diente" novalidate>
-                <h5>Pieza ${numero}</h5><p>${esc(nombreDiente(numero))}</p>
-                <label class="campo">
-                    <span class="campo__etiqueta">Estado</span>
-                    <select name="estado">${Object.entries(ESTADOS_DIENTE).map(([k, v]) => `<option value="${k}">${esc(v.nombre)}</option>`).join('')}</select>
-                </label>
-                <div class="campo" id="campo-caras">
-                    <span class="campo__etiqueta">Caras afectadas</span>
-                    <div class="caras">${Object.entries(CARAS).map(([k, v]) =>
-                        `<label><input type="checkbox" name="cara" value="${k}"${caras.has(k) ? ' checked' : ''}> ${k} · ${v}</label>`).join('')}</div>
-                </div>
-                <label class="campo">
-                    <span class="campo__etiqueta">Observaciones</span>
-                    <textarea name="descripcion" maxlength="500" placeholder="Opcional">${esc(actual.descripcion || '')}</textarea>
-                </label>
-                <div class="acciones-form" style="margin-top:4px">
-                    <button type="submit" class="btn btn--primario btn--chico">${icono('check')}Guardar pieza</button>
-                </div>
-            </form>`;
-        const form = editor.querySelector('form');
-        form.estado.value = estadoInicial;
-        const verCaras = () => { editor.querySelector('#campo-caras').hidden = !ESTADOS_DIENTE[form.estado.value].caras; };
-        form.estado.onchange = verCaras;
-        verCaras();
-        form.onsubmit = async e => {
+        const d = this.dientesMostrados().find(x => x.numero === numero);
+        const cambios = this.historial.filter(c => c.numero === numero);
+        editor.innerHTML = `<h5>Pieza ${numero}</h5><p>${esc(nombreDiente(numero))}</p>
+            <div class="detalle__dato"><small>${this.fechaVista ? `Al ${esc(Fecha.corta(this.fechaVista))}` : 'Estado actual'}</small><strong>${esc(resumenPieza(d))}</strong></div>
+            ${this.fechaVista ? '' : `<form id="form-nota" novalidate style="margin-top:10px">
+                <label class="campo"><span class="campo__etiqueta">Nota de la pieza</span>
+                    <textarea name="descripcion" maxlength="500" placeholder="Ej. resina colocada, revisar en 6 meses">${esc(d?.descripcion || '')}</textarea></label>
+                <div class="acciones-form" style="margin-top:4px"><button type="submit" class="btn btn--primario btn--chico">${icono('check')}Guardar nota</button></div>
+            </form>`}
+            <small class="texto-suave">${cambios.length ? `${cambios.length} cambio(s) registrados en el historial.` : 'Sin cambios registrados.'}</small>`;
+        editor.querySelector('#form-nota')?.addEventListener('submit', e => {
             e.preventDefault();
-            const datos = {
-                estado: form.estado.value,
-                superficies: [...form.querySelectorAll('[name=cara]:checked')].map(x => x.value),
-                descripcion: form.descripcion.value.trim(),
-            };
-            if (ESTADOS_DIENTE[datos.estado].caras && !datos.superficies.length) {
-                return toast('Marca al menos una cara afectada.', 'error');
-            }
-            try {
-                const guardado = await Api.guardarDiente(this.paciente.id, numero, datos);
-                this.datos.dientes = this.datos.dientes.filter(d => d.numero !== numero);
-                if (guardado.estado !== 'Sano' || guardado.descripcion) this.datos.dientes.push(guardado);
-                this.datos.dientes.sort((a, b) => a.numero - b.numero);
-                toast(`Pieza ${numero} actualizada.`);
-                this.pintarOdontograma(document.getElementById('exp-contenido'));
-            } catch (err) {
-                toast(err.message, 'error');
-            }
-        };
+            const actual = d || { estado: 'Sano', caras: {} };
+            this.guardarPieza(numero, { estado: actual.estado, caras: actual.caras || {} }, e.target.descripcion.value.trim());
+        });
     },
 
     /* ================= Antecedentes ================= */
@@ -305,8 +384,8 @@ const Odontograma = {
         return `<svg viewBox="0 0 ${anchoTotal} ${alto}" role="img" aria-label="Odontograma del paciente">
             <line class="linea-media" x1="${medio}" y1="6" x2="${medio}" y2="${alto - 6}"/>
             <line class="linea-media" x1="8" y1="150" x2="${anchoTotal - 8}" y2="150"/>
-            <text class="etiqueta-arcada" x="10" y="146">DERECHO</text>
-            <text class="etiqueta-arcada" x="${anchoTotal - 10}" y="146" text-anchor="end">IZQUIERDO</text>
+            <text class="etiqueta-arcada" x="10" y="146">DERECHO DEL PACIENTE</text>
+            <text class="etiqueta-arcada" x="${anchoTotal - 10}" y="146" text-anchor="end">IZQUIERDO DEL PACIENTE</text>
             ${piezas}
         </svg>`;
     },
@@ -314,8 +393,7 @@ const Odontograma = {
     /** Una pieza: silueta (corona y raíces) + cuadro de 5 caras + número. */
     pieza(n, x, y, superior, d) {
         const estado = d?.estado || 'Sano';
-        const info = ESTADOS_DIENTE[estado] || {};
-        const caras = new Set(d?.superficies || []);
+        const caras = d?.caras || {};
         const S = this.CAJA, a = 10, cx = x + (this.ANCHO - S) / 2;
         // Arriba de la arcada superior van las raíces; en la inferior, abajo.
         const cajaY = superior ? y + 64 : y + 22;
@@ -334,13 +412,14 @@ const Odontograma = {
             [izq]: [[0, 0], [a, a], [a, S - a], [0, S]],
             [der]: [[S, 0], [S, S], [S - a, S - a], [S - a, a]],
         };
-        const relleno = cara => (info.caras && caras.has(cara) ? info.color : '');
+        const relleno = cara => (caras[cara] ? ` style="fill:${HALLAZGOS[caras[cara]].color}"` : '');
+        const titulo = cara => `<title>${n} · ${CARAS[cara]}${caras[cara] ? ` · ${HALLAZGOS[caras[cara]].nombre}` : ''}</title>`;
         const carasSvg = Object.entries(poligonos).map(([cara, pts]) =>
-            `<polygon class="cara" data-cara="${cara}" points="${pts.map(rel).join(' ')}"${relleno(cara) ? ` style="fill:${relleno(cara)}"` : ''}><title>${n} · ${CARAS[cara]}</title></polygon>`).join('')
-            + `<rect class="cara" data-cara="O" x="${cx + a}" y="${cajaY + a}" width="${S - 2 * a}" height="${S - 2 * a}"${relleno('O') ? ` style="fill:${relleno('O')}"` : ''}><title>${n} · ${CARAS.O}</title></rect>`;
+            `<polygon class="cara" data-cara="${cara}" points="${pts.map(rel).join(' ')}"${relleno(cara)}>${titulo(cara)}</polygon>`).join('')
+            + `<rect class="cara" data-cara="O" x="${cx + a}" y="${cajaY + a}" width="${S - 2 * a}" height="${S - 2 * a}"${relleno('O')}>${titulo('O')}</rect>`;
 
         return `<g class="diente" data-diente="${n}">
-            <title>${n} · ${nombreDiente(n)} · ${info.nombre || estado}</title>
+            <title>${n} · ${nombreDiente(n)} · ${resumenPieza(d)}</title>
             <rect class="caja-fondo" x="${x + 2}" y="${y - 4}" width="${this.ANCHO - 4}" height="134" rx="8" fill="transparent"/>
             ${this.silueta(n, x + this.ANCHO / 2, siluetaY, superior, estado)}
             ${carasSvg}
@@ -361,13 +440,11 @@ const Odontograma = {
         const raizY0 = superior ? coronaY : coronaY + altoCorona;
         const dir = superior ? -1 : 1;
         const x0 = centro - anchoCorona / 2;
-        const ausente = estado === 'Ausente';
-        let raizSvg = '';
+        let raizSvg;
         if (estado === 'Implante') {
             // Tornillo del implante en lugar de raíz.
-            const h = altoRaiz;
-            const yA = raizY0, yB = raizY0 + dir * h;
-            raizSvg = `<rect x="${centro - 4}" y="${Math.min(yA, yB)}" width="8" height="${h}" rx="2" fill="#8a94a6" stroke="#4b5563"/>`
+            const yA = raizY0, yB = raizY0 + dir * altoRaiz;
+            raizSvg = `<rect x="${centro - 4}" y="${Math.min(yA, yB)}" width="8" height="${altoRaiz}" rx="2" fill="#8a94a6" stroke="#4b5563"/>`
                 + Array.from({ length: 5 }, (_, i) => {
                     const yy = raizY0 + dir * (5 + i * 5.5);
                     return `<line x1="${centro - 6}" y1="${yy}" x2="${centro + 6}" y2="${yy + dir * 2}" stroke="#4b5563" stroke-width="1.4"/>`;
@@ -376,8 +453,7 @@ const Odontograma = {
             const paso = anchoCorona / (raices + 1);
             raizSvg = Array.from({ length: raices }, (_, i) => {
                 const rx = x0 + paso * (i + 1);
-                const base = 5;
-                return `<path class="silueta" d="M ${rx - base} ${raizY0} L ${rx} ${raizY0 + dir * altoRaiz} L ${rx + base} ${raizY0} Z"/>`
+                return `<path class="silueta" d="M ${rx - 5} ${raizY0} L ${rx} ${raizY0 + dir * altoRaiz} L ${rx + 5} ${raizY0} Z"/>`
                     + (estado === 'Endodoncia' ? `<line x1="${rx}" y1="${raizY0}" x2="${rx}" y2="${raizY0 + dir * (altoRaiz - 3)}" stroke="#d63b3b" stroke-width="2.4" stroke-linecap="round"/>` : '');
             }).join('');
         }
@@ -386,7 +462,7 @@ const Odontograma = {
         const bracket = estado === 'Ortodoncia'
             ? `<rect x="${centro - 4}" y="${coronaY + altoCorona / 2 - 4}" width="8" height="8" rx="1.5" fill="#5f9e1c"/><line x1="${x0 - 4}" y1="${coronaY + altoCorona / 2}" x2="${x0 + anchoCorona + 4}" y2="${coronaY + altoCorona / 2}" stroke="#5f9e1c" stroke-width="1.6"/>`
             : '';
-        return `<g opacity="${ausente ? 0.25 : 1}">${raizSvg}${corona}${bracket}</g>`;
+        return `<g opacity="${estado === 'Ausente' ? 0.25 : 1}">${raizSvg}${corona}${bracket}</g>`;
     },
 
     /** Marcas que aplican a toda la pieza, dibujadas sobre el cuadro de caras. */
@@ -399,19 +475,21 @@ const Odontograma = {
         return '';
     },
 
-    leyenda() {
-        const cuadro = color => `<svg viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" rx="3" fill="${color}" stroke="#7a869a"/></svg>`;
-        const item = (svg, texto) => `<li>${svg}${texto}</li>`;
-        return `<ul class="leyenda-odontograma">
-            ${item(cuadro('#d63b3b'), 'Caries')}
-            ${item(cuadro('#2463b8'), 'Restaurado')}
-            ${item(cuadro('#e8590c'), 'Fractura')}
-            ${item('<svg viewBox="0 0 22 22"><circle cx="11" cy="11" r="8" fill="none" stroke="#2463b8" stroke-width="2.5"/></svg>', 'Corona')}
-            ${item('<svg viewBox="0 0 22 22"><path d="M8 3 11 19 14 3Z" fill="#fbfbfd" stroke="#9aa5b5"/><line x1="11" y1="4" x2="11" y2="16" stroke="#d63b3b" stroke-width="2.4"/></svg>', 'Endodoncia')}
-            ${item('<svg viewBox="0 0 22 22"><rect x="7" y="3" width="8" height="16" rx="2" fill="#8a94a6"/></svg>', 'Implante')}
-            ${item('<svg viewBox="0 0 22 22"><rect x="7" y="7" width="8" height="8" fill="#5f9e1c"/><line x1="1" y1="11" x2="21" y2="11" stroke="#5f9e1c" stroke-width="1.6"/></svg>', 'Bracket')}
-            ${item('<svg viewBox="0 0 22 22"><path d="M4 4l14 14M18 4 4 18" stroke="#d63b3b" stroke-width="3"/></svg>', 'Por extraer')}
-            ${item('<svg viewBox="0 0 22 22"><path d="M4 4l14 14M18 4 4 18" stroke="#2463b8" stroke-width="3"/></svg>', 'Ausente')}
-        </ul>`;
+    /** Icono de cada herramienta: es también la guía de qué significa cada marca. */
+    icono(h) {
+        const caja = color => `<svg viewBox="0 0 22 22" class="odo-ic"><rect x="2" y="2" width="18" height="18" fill="#fff" stroke="#7a869a"/><polygon points="2,2 20,2 15,7 7,7" fill="${color}"/><rect x="7" y="7" width="8" height="8" fill="#fff" stroke="#7a869a"/></svg>`;
+        const iconos = {
+            Caries: caja('#d63b3b'),
+            Restaurado: caja('#2463b8'),
+            Fractura: caja('#e8590c'),
+            Corona: '<svg viewBox="0 0 22 22" class="odo-ic"><circle cx="11" cy="11" r="8" fill="none" stroke="#2463b8" stroke-width="2.5"/></svg>',
+            Endodoncia: '<svg viewBox="0 0 22 22" class="odo-ic"><path d="M8 3 11 19 14 3Z" fill="#fbfbfd" stroke="#9aa5b5"/><line x1="11" y1="4" x2="11" y2="16" stroke="#d63b3b" stroke-width="2.4"/></svg>',
+            Implante: '<svg viewBox="0 0 22 22" class="odo-ic"><rect x="7" y="3" width="8" height="16" rx="2" fill="#8a94a6"/><path d="M5 7h12M5 11h12M5 15h12" stroke="#4b5563"/></svg>',
+            Ortodoncia: '<svg viewBox="0 0 22 22" class="odo-ic"><rect x="7" y="7" width="8" height="8" fill="#5f9e1c"/><line x1="1" y1="11" x2="21" y2="11" stroke="#5f9e1c" stroke-width="1.6"/></svg>',
+            PorExtraer: '<svg viewBox="0 0 22 22" class="odo-ic"><path d="M4 4l14 14M18 4 4 18" stroke="#d63b3b" stroke-width="3"/></svg>',
+            Ausente: '<svg viewBox="0 0 22 22" class="odo-ic"><path d="M4 4l14 14M18 4 4 18" stroke="#2463b8" stroke-width="3"/></svg>',
+            Sano: '<svg viewBox="0 0 24 24" class="odo-ic"><path d="M20 20H7L3 16l10-10 7 7-6 6M13 6l7 7" fill="none" stroke="#4b5563" stroke-width="2" stroke-linejoin="round"/></svg>',
+        };
+        return iconos[h] || '';
     },
 };

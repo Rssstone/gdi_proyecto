@@ -20,7 +20,7 @@ const PacientesVista = {
                         <td>${esc(p.telefono || '—')}</td>
                         <td>${esc(p.email || '—')}</td>
                         <td class="acciones">
-                            <button class="btn btn--suave btn--chico" data-accion="expediente">${icono('diente')}Expediente</button>
+                            ${App.puede('clinico') ? `<button class="btn btn--suave btn--chico" data-accion="expediente">${icono('diente')}Expediente</button>` : ''}
                             <button class="btn-icono" data-accion="historial" title="Ver citas">${icono('lista')}</button>
                             ${gestion ? `<button class="btn-icono" data-accion="editar" title="Editar datos">${icono('editar')}</button>
                             <button class="btn btn--suave btn--chico" data-accion="agendar">${icono('calendario')}Agendar</button>` : ''}

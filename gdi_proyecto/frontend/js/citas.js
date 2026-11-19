@@ -394,7 +394,7 @@ const CitasVista = {
             const ayuda = cuerpo.querySelector('#cita-hora-ayuda');
             const hora = form.hora.value;
             ayuda.textContent = hora
-                ? `La cita sería de ${Fecha.hora12(hora)} a ${Fecha.hora12(sumarMinutos(hora, Number(form.duracionMinutos.value)))}.`
+                ? `La cita sería de ${Fecha.hora12(hora)} a ${Fecha.hora12(sumarMinutos(hora, Number(form.duracionMinutos.value)))}`
                 : `Solo aparecen los horarios en los que cabe la cita completa (${Fecha.duracion(Number(form.duracionMinutos.value))}).`;
         };
 

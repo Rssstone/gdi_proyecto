@@ -487,3 +487,19 @@ select:disabled { background: var(--gris-100); color: var(--gris-500); }
 .pestanas { max-width: 100%; overflow-x: auto; }
 .pestanas button { white-space: nowrap; }
 input[type=file] { padding: 7px 10px; background: var(--blanco); }
+
+/* ---------- Herramientas del odontograma (también sirven de guía) ---------- */
+.odo-barra { display: grid; grid-template-columns: 1.1fr 2fr auto; gap: 10px; margin-bottom: 8px; }
+.odo-barra--inactiva { opacity: .45; pointer-events: none; }
+.odo-grupo { border: 1px solid var(--gris-200); border-radius: 12px; padding: 8px 10px; background: var(--gris-100); }
+.odo-grupo__titulo { display: block; font-size: 11px; font-weight: 800; color: var(--gris-700); text-transform: uppercase; letter-spacing: .3px; margin-bottom: 6px; }
+.odo-grupo__botones { display: flex; flex-wrap: wrap; gap: 6px; }
+.odo-herr { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 9px; border: 1.5px solid var(--gris-300);
+    background: var(--blanco); font-size: 13px; font-weight: 700; cursor: pointer; }
+.odo-herr:hover { border-color: var(--azul-600); }
+.odo-herr.activo { border-color: var(--azul-600); background: var(--azul-100); color: var(--azul-700); box-shadow: 0 0 0 2px rgba(36, 99, 184, .15); }
+.odo-ic { width: 20px; height: 20px; flex: none; }
+.odo-convencion { margin: 0 0 10px; font-size: 12px; color: var(--gris-700); }
+.odo-vista { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
+.odontograma--pasado { background: #fffaf2; border-color: #f1cf8f; }
+@media (max-width: 760px) { .odo-barra { grid-template-columns: 1fr; } }

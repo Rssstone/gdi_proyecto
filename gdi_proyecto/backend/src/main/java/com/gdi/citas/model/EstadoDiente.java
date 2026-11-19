@@ -1,28 +1,40 @@
 package com.gdi.citas.model;
 
 /**
- * Estado de una pieza en el odontograma. Los que afectan superficies (caries, restauración, fractura) se marcan
- * por cara del diente; los demás aplican a la pieza completa.
+ * Hallazgos del odontograma. Caries, restauración y fractura se marcan por cara del diente (con un código de una
+ * letra para guardarlas); los demás aplican a la pieza completa. Una pieza puede tener ambos a la vez, por ejemplo
+ * endodoncia en la pieza y una restauración en la cara oclusal.
  */
 public enum EstadoDiente {
-    Sano(false),
-    Caries(true),
-    Restaurado(true),
-    Fractura(true),
-    Corona(false),
-    Endodoncia(false),
-    Implante(false),
-    Ortodoncia(false),
-    PorExtraer(false),
-    Ausente(false);
+    Sano(null),
+    Caries("C"),
+    Restaurado("R"),
+    Fractura("F"),
+    Corona(null),
+    Endodoncia(null),
+    Implante(null),
+    Ortodoncia(null),
+    PorExtraer(null),
+    Ausente(null);
 
-    private final boolean porSuperficie;
+    private final String codigo;
 
-    EstadoDiente(boolean porSuperficie) {
-        this.porSuperficie = porSuperficie;
+    EstadoDiente(String codigo) {
+        this.codigo = codigo;
     }
 
     public boolean esPorSuperficie() {
-        return porSuperficie;
+        return codigo != null;
+    }
+
+    public String codigo() {
+        return codigo;
+    }
+
+    public static EstadoDiente deCodigo(String codigo) {
+        for (EstadoDiente e : values()) {
+            if (codigo.equals(e.codigo)) return e;
+        }
+        throw new IllegalArgumentException("Código de superficie no válido: " + codigo);
     }
 }
