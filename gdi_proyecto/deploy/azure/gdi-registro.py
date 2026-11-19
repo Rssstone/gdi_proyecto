@@ -125,10 +125,10 @@ def mysql():
     if not os.path.exists(LOG_SQL):
         sys.exit(f'No existe {LOG_SQL}. Ejecuta antes:  sudo bash deploy/azure/activar-registro.sh')
     print(c(NEGRITA, 'Registro de MySQL de GDI (en vivo)') + '   ·   Ctrl + C para salir')
-    print(c(GRIS, 'NUEVO = INSERT · MODIFICADO = UPDATE · BORRADO = DELETE · CONSULTA = SELECT · CONEXIÓN = el backend se conectó'))
+    print(c(GRIS, 'NUEVO = INSERT · MODIFICADO = UPDATE · BORRADO = DELETE · CONSULTA = SELECT · CONEXIÓN = el backend se conectó (solo se muestra la primera vez)'))
     print()
     entrada = re.compile(r'^(\d{4}-\d\d-\d\dT(\d\d:\d\d:\d\d))\S*\s+\d+\s+(\w+)\s*(.*)$')
-    ultima_conexion = None
+    conexiones_vistas = set()
     for linea in seguir(['tail', '-n', '60', '-F', LOG_SQL]):
         m = entrada.match(linea)
         if not m:
@@ -139,9 +139,11 @@ def mysql():
             if m2 and m2.group(4) == 'Socket':
                 continue                      # conexiones internas de la propia VM (mantenimiento de Ubuntu)
             desc = (f'usuario {m2.group(1)} desde {m2.group(2)} a la base {m2.group(3)} ({m2.group(4)})' if m2 else texto)
-            if (hora[:5], desc) == ultima_conexion:
-                continue                      # el backend abre varias conexiones a la vez: se muestra una sola
-            ultima_conexion = (hora[:5], desc)
+            # El backend tiene varias conexiones abiertas y las renueva cada 3 minutos (Azure corta las inactivas).
+            # Esa renovación es normal: solo se muestra la primera conexión de cada usuario/IP.
+            if desc in conexiones_vistas:
+                continue
+            conexiones_vistas.add(desc)
             print(c(AZUL, f'{hora} CONEXIÓN   {desc}'))
             continue
         if tipo != 'Query':
