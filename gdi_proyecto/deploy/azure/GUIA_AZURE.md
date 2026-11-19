@@ -1,77 +1,53 @@
 # Despliegue de GDI en Azure
 
-| Pieza | Dónde corre | Servicio de Azure |
+| Capa | Dónde corre | Detalle |
 |---|---|---|
-| Interfaz (HTML, CSS, JS) | Laptop del equipo | — (se abre con Live Server o el navegador) |
-| Backend (Spring Boot, puerto 8080) | Nube | **Máquina virtual** Ubuntu 24.04, tamaño B1s |
-| Base de datos (MySQL 8) | Nube | **Azure Database for MySQL – Servidor flexible**, tamaño B1ms |
+| Presentación (HTML, CSS, JS) | Laptop del equipo | Se abre con Live Server o con el navegador |
+| Negocio (Spring Boot, puerto 8080) | **Máquina virtual de Azure** | Ubuntu 24.04, servicio `gdi-backend` |
+| Datos (MySQL 8) | **La misma máquina virtual** | Servicio `mysql`. Solo acepta conexiones desde la propia VM y se respalda a diario. |
 
 ```
-Laptop (navegador) ──HTTP :8080──▶ VM de Azure (Spring Boot) ──MySQL :3306 con TLS──▶ Azure Database for MySQL
+Laptop (navegador) ──HTTP :8080──▶ VM de Azure [ Spring Boot ──localhost:3306──▶ MySQL 8 ]
 ```
 
-> Nadie del equipo debe compartir contraseñas por chat. Cada paso se hace desde el portal con la cuenta del IPN
-> (suscripción **Azure for Students**).
+> ¿Por qué MySQL va dentro de la VM? Con la suscripción **Azure for Students**, el servicio administrado
+> *Azure Database for MySQL* no se pudo crear en la región permitida (Chile Central). Así no cambia nada del código y
+> todo cabe en las horas gratis de una VM. Las 3 capas siguen separadas: cada una es un proceso distinto.
+
+Nadie del equipo debe compartir contraseñas por chat.
 
 ---
 
-## Paso 1. Grupo de recursos
+## Paso 1. Crear la máquina virtual
 
-1. En el buscador del portal escribe **Grupos de recursos** → **Crear**.
-2. Suscripción: **Azure for Students**. Nombre: `rg-gdi`. Región: **Chile Central**, o la que permita la suscripción.
-   La suscripción de estudiante del IPN solo deja crear recursos en algunas regiones. Para ver la lista: buscador →
-   **Directiva** → **Asignaciones** → *Allowed resource deployment regions* → **Parámetros**. Si al crear sale
-   *"The template deployment failed because of policy violation"*, la región no está permitida.
-3. **Revisar y crear** → **Crear**.
-
-## Paso 2. Servidor de base de datos MySQL
-
-1. Buscador → **Azure Database for MySQL** (es la pantalla "Servidores de Azure Database for MySQL") → **Crear**.
-2. Elige **Servidor flexible**. El "servidor único" ya está retirado; no lo uses.
-3. Pestaña **Aspectos básicos**:
-   - Grupo de recursos: `rg-gdi`.
-   - Nombre del servidor: `gdi-mysql-omegatech`. Debe ser único en todo Azure; si está ocupado, agrega un número.
-   - Región: **Chile Central**, o la región permitida (la misma para MySQL y la VM).
-   - Versión de MySQL: **8.0**.
-   - Tipo de carga de trabajo: **Para proyectos de desarrollo o pasatiempos**.
-   - Proceso y almacenamiento → **Configurar servidor**:
-     - Nivel **Ampliable (Burstable)**, tamaño **Standard_B1ms**.
-     - Almacenamiento **20 GiB**.
-     - Alta disponibilidad **deshabilitada**.
-     - Copia de seguridad: deja **7 días**.
-   - Método de autenticación: **Solo autenticación de MySQL**.
-   - Usuario administrador: `gdiadmin`. Contraseña: una fuerte; anótenla en un lugar seguro.
-4. Pestaña **Redes**:
-   - Método de conectividad: **Acceso público (direcciones IP permitidas)**.
-   - Marca **Permitir el acceso público desde cualquier servicio de Azure dentro de Azure a este servidor**.
-     Así la máquina virtual puede conectarse.
-   - Opcional: **+ Agregar dirección IP del cliente actual**, si quieren abrir la base desde su laptop con MySQL
-     Workbench.
-5. **Revisar y crear** → **Crear**. Tarda de 5 a 10 minutos.
-6. Cuando termine, entra al recurso y copia el **Nombre del servidor** de la página Información general. Se ve
-   como `gdi-mysql-omegatech.mysql.database.azure.com`.
-
-> No hace falta crear la base `gdi_db` a mano: el script del paso 5 la crea y carga `init.sql` la primera vez.
-
-## Paso 3. Máquina virtual para el backend
-
-1. Buscador → **Máquinas virtuales** → **Crear** → **Máquina virtual de Azure**.
+1. Buscador del portal → **Máquinas virtuales** → **Crear** → **Máquina virtual de Azure**.
 2. **Aspectos básicos**:
-   - Grupo de recursos: `rg-gdi`. Nombre: `vm-gdi-backend`. Región: la misma que el servidor MySQL (**Chile Central**).
+   - Suscripción: **Azure for Students**.
+   - Grupo de recursos: `rg-gdi`; si no existe, **Crear nuevo**.
+   - Nombre: `vm-gdi`.
+   - Región: **Chile Central**, o la que permita la suscripción. Para ver la lista: buscador → **Directiva** →
+     **Asignaciones** → *Allowed resource deployment regions* → **Parámetros**.
+   - Opciones de disponibilidad: **No se requiere redundancia de infraestructura**.
    - Imagen: **Ubuntu Server 24.04 LTS – x64 Gen2**.
-   - Tamaño: **Standard_B1s** (1 vCPU, 1 GiB). Si no aparece, usa **Standard_B2ats_v2** o **B1ms**.
+   - Tamaño: **Standard_B1s** (1 vCPU, 1 GiB). Es el que entra en las 750 horas gratis. Si no aparece, usa
+     **Standard_B1ms** o **Standard_B2ats_v2**.
    - Tipo de autenticación: **Contraseña**. Usuario: `azureuser`, más una contraseña fuerte.
    - Puertos de entrada públicos: **Permitir los puertos seleccionados** → **SSH (22)**.
-3. **Revisar y crear** → **Crear**.
-4. Al terminar, entra a la VM. En **Redes → Configuración de red** pulsa **Crear regla de puerto** → **Regla de
-   puerto de entrada**:
-   - Puerto de destino `8080`, protocolo **TCP**, acción **Permitir**, nombre `Backend-8080`.
-5. Recomendado: en **Información general**, da clic en la **IP pública** → **Configuración**:
-   - En **Etiqueta de nombre DNS** escribe `gdi-clinica-omegatech` y guarda.
-   - Así la dirección será fija, por ejemplo `gdi-clinica-omegatech.chilecentral.cloudapp.azure.com`, aunque se apague
-     la VM.
+3. **Discos**: deja **SSD estándar**.
+4. **Revisar y crear** → **Crear**. Tarda unos 2 minutos.
 
-## Paso 4. Entrar a la máquina virtual
+## Paso 2. Abrir el puerto del backend y fijar la dirección
+
+1. Entra a la VM. En **Redes → Configuración de red** pulsa **Crear regla de puerto** → **Regla de puerto de
+   entrada**:
+   - Puerto de destino `8080`, protocolo **TCP**, acción **Permitir**, nombre `Backend-8080`.
+   - **No abras el puerto 3306**: MySQL no debe quedar expuesto a internet.
+2. En **Información general**, da clic en la **IP pública** → **Configuración**. En **Etiqueta de nombre DNS**
+   escribe `gdi-clinica-omegatech` y guarda.
+   - La dirección queda fija aunque se apague la VM, por ejemplo
+     `gdi-clinica-omegatech.chilecentral.cloudapp.azure.com`.
+
+## Paso 3. Entrar a la máquina virtual
 
 Desde la terminal de la laptop (PowerShell en Windows):
 
@@ -81,7 +57,7 @@ ssh azureuser@IP-PUBLICA-DE-LA-VM
 
 Escribe `yes` la primera vez y luego la contraseña de la VM.
 
-## Paso 5. Instalar el backend (un solo comando)
+## Paso 4. Instalar todo (un solo comando)
 
 Dentro de la VM:
 
@@ -91,57 +67,55 @@ cd gdi_proyecto/gdi_proyecto
 sudo bash deploy/azure/instalar-backend.sh
 ```
 
-> Si el repositorio es privado, GitHub pedirá usuario y contraseña. En la contraseña se pega un **token
-> personal**, que se crea en GitHub → Settings → Developer settings → Personal access tokens. También pueden
-> hacer público el repositorio.
+> Si los cambios todavía no están en `main`, clona la rama así:
+> `git clone -b claude/sleepy-ptolemy-9z8bjy https://github.com/Rssstone/gdi_proyecto.git`
+>
+> Si el repositorio es privado, GitHub pedirá usuario y contraseña. En la contraseña se pega un **token personal**
+> (GitHub → Settings → Developer settings → Personal access tokens).
 
-El script pregunta tres datos:
+El script no pregunta nada. Tarda de 5 a 10 minutos y hace esto:
 
-- **Servidor MySQL:** el nombre copiado en el paso 2, `…mysql.database.azure.com`.
-- **Usuario:** `gdiadmin`.
-- **Contraseña** de MySQL.
+1. Pone la hora de la Ciudad de México y activa 2 GB de memoria de intercambio.
+2. Instala **Java 17** y **MySQL 8**. MySQL queda ajustado para poca memoria y solo escucha dentro de la VM.
+3. Crea la base `gdi_db` y un usuario `gdi` con una contraseña aleatoria, guardada en `/etc/gdi/backend.env`.
+   Carga `init.sql` con las tablas y los datos de ejemplo.
+4. Compila el backend y lo deja como servicio `gdi-backend`. Arranca solo aunque se reinicie la VM.
+5. Programa un **respaldo diario** de la base en `/var/backups/gdi`; se guardan 7 días.
 
-Después hace lo siguiente:
+Al final muestra la línea que hay que poner en la laptop. Para comprobar que funciona, abre en el navegador
+`http://IP-PUBLICA-DE-LA-VM:8080/api/agenda/configuracion`: debe mostrar un JSON con la hora de la clínica.
 
-1. Instala Java 17 y el cliente de MySQL.
-2. Activa 2 GB de memoria de intercambio.
-3. Carga `init.sql` si la base está vacía.
-4. Compila el backend.
-5. Lo deja como servicio `gdi-backend`, que arranca solo aunque se reinicie la VM.
-
-Al final muestra la línea que hay que poner en la laptop.
-
-Para comprobarlo, abre esta dirección en el navegador. Debe mostrar un JSON con la hora de la clínica:
-`http://IP-PUBLICA-DE-LA-VM:8080/api/agenda/configuracion`
-
-## Paso 6. Interfaz en la laptop
+## Paso 5. Interfaz en la laptop
 
 1. Abre la carpeta `gdi_proyecto/frontend` en VS Code.
-2. Edita `js/config.js` y pon la IP o el nombre DNS de la VM:
+2. Edita `js/config.js` y pon el nombre DNS (o la IP) de la VM:
 
    ```js
    window.GDI_API_URL = 'http://gdi-clinica-omegatech.chilecentral.cloudapp.azure.com:8080/api';
    ```
 
-3. Abre `index.html` con **Live Server** (o con doble clic). Entra con `recepcion@clinica.com` / `12345`.
+3. Abre `index.html` con **Live Server**. Entra con `recepcion@clinica.com` / `12345`.
 
-Cada integrante hace lo mismo en su laptop: todos usan la misma base de datos en la nube.
+Cada integrante hace lo mismo en su laptop: todos usan la misma base de datos en la nube. Para esto **no hay que
+registrar la IP de nadie**.
 
 ## Mantenimiento
 
-| Qué | Cómo |
+| Qué | Cómo (dentro de la VM) |
 |---|---|
-| Subir cambios del backend | En la VM: `cd gdi_proyecto/gdi_proyecto && sudo bash deploy/azure/actualizar-backend.sh` |
-| Ver si está corriendo | `sudo systemctl status gdi-backend` |
-| Ver errores | `sudo journalctl -u gdi-backend -n 80` |
-| Ahorrar crédito | Detén la VM y el servidor MySQL desde el portal (**Detener**) cuando no los usen. Al volver a encenderlos el backend arranca solo. |
+| Subir cambios del backend | `cd gdi_proyecto/gdi_proyecto && sudo bash deploy/azure/actualizar-backend.sh` |
+| Ver si están corriendo | `sudo systemctl status gdi-backend mysql` |
+| Ver errores del backend | `sudo journalctl -u gdi-backend -n 80` |
+| Entrar a la base de datos | `sudo mysql gdi_db` |
+| Respaldo manual | `sudo /etc/cron.daily/gdi-respaldo` (queda en `/var/backups/gdi`) |
+| Ahorrar horas gratis | En el portal, **Detener** la VM cuando no la usen. Al encenderla, MySQL y el backend arrancan solos. |
 
 ## Problemas comunes
 
 | Síntoma | Solución |
 |---|---|
-| "No hay conexión con MySQL" en el script | En el servidor MySQL → **Redes**, verifica la casilla de servicios de Azure o agrega la IP pública de la VM. |
-| La página dice "No hay conexión con el servidor" | Falta la regla del puerto **8080** (paso 3.4), la VM está apagada o `config.js` tiene otra IP. |
-| La IP de la VM cambió | Usa la etiqueta DNS del paso 3.5, o actualiza `config.js` con la IP nueva. |
-| *"policy violation"* al crear | La región no está permitida para Azure for Students: usa **Chile Central** u otra de la lista de la directiva. |
-| No aparece el tamaño B1s o B1ms | Esa región no lo ofrece: elige el tamaño más barato disponible (B2ats_v2, B1ms). |
+| *"policy violation"* al crear la VM | La región no está permitida: usa **Chile Central** u otra de la lista de la directiva. |
+| No aparece el tamaño B1s | Elige el más barato disponible (B1ms o B2ats_v2). |
+| La página dice "No hay conexión con el servidor" | Falta la regla del puerto **8080**, la VM está apagada o `config.js` tiene otra dirección. |
+| El backend no arranca | `sudo journalctl -u gdi-backend -n 80` y `sudo systemctl status mysql`. Si dice memoria insuficiente, reinicia la VM. |
+| Quieren ver la base con MySQL Workbench desde la laptop | Usa la opción **SSH** de Workbench ("Standard TCP/IP over SSH") con `azureuser` y la contraseña de la VM; en la parte de MySQL usa `127.0.0.1`, usuario `gdi` y la contraseña que aparece con `sudo cat /etc/gdi/backend.env`. Así no se abre el puerto 3306. |
