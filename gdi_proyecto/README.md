@@ -15,10 +15,11 @@ coronas, puentes y prótesis).
 
 ## Despliegue en la nube (Azure)
 
-La interfaz corre en la laptop. El backend y MySQL 8 corren en una **máquina virtual de Azure** (Ubuntu, Chile
-Central), cada uno como servicio; MySQL solo acepta conexiones desde la propia VM y se respalda a diario. Paso a paso
-en [`deploy/azure/GUIA_AZURE.md`](deploy/azure/GUIA_AZURE.md): en la VM basta `sudo bash deploy/azure/instalar-backend.sh`,
-y la laptop apunta al backend en `frontend/js/config.js`. El diagrama está en [`docs/Arquitectura_GDI.png`](docs/Arquitectura_GDI.png)
+La interfaz corre en la laptop; el backend en la VM **vm-gdi-backend** y MySQL 8 en la VM **gdi-mysql-omegatech**
+(Ubuntu, Chile Central), en la misma red virtual. MySQL solo acepta la red privada y se respalda a diario. Paso a paso
+en [`deploy/azure/GUIA_AZURE.md`](deploy/azure/GUIA_AZURE.md): `sudo bash deploy/azure/instalar-mysql.sh` en la VM de
+datos, `sudo bash deploy/azure/instalar-backend.sh` en la del backend, y la laptop apunta al backend en
+`frontend/js/config.js`. El diagrama está en [`docs/Arquitectura_GDI.png`](docs/Arquitectura_GDI.png)
 (editable en `docs/Arquitectura_GDI.drawio`).
 
 ## Cómo ejecutarlo

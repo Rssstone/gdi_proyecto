@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Instala GDI en una máquina virtual Ubuntu de Azure: MySQL 8 y el backend de Spring Boot en la misma VM,
-# cada uno como servicio que arranca solo. La interfaz corre en la laptop y llama a http://IP-VM:8080/api.
+# Instala el backend de Spring Boot de GDI en una máquina virtual Ubuntu de Azure como servicio que arranca solo.
+# La base de datos puede estar en otra VM (recomendado: instalar-mysql.sh) o en esta misma. La interfaz corre en la laptop y llama a http://IP-VM:8080/api.
 #
 # Uso (dentro de la VM, en la carpeta gdi_proyecto/gdi_proyecto del repositorio):
 #   sudo bash deploy/azure/instalar-backend.sh
 # Se puede volver a ejecutar: no borra datos y reutiliza la contraseña ya generada.
 #
-# Opcional: para usar un servidor MySQL externo (por ejemplo Azure Database for MySQL) en lugar del local:
-#   sudo DB_HOST=servidor.mysql.database.azure.com DB_USER=gdiadmin DB_PASS='...' bash deploy/azure/instalar-backend.sh
+# Pregunta la IP privada de la VM de MySQL (instalada con instalar-mysql.sh), su usuario y contraseña.
+# Si se deja vacía, instala MySQL en esta misma VM.
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -36,6 +36,9 @@ if [ -f "$CONFIG" ]; then
     # Reutiliza lo configurado en una instalación anterior.
     set -a; . "$CONFIG"; set +a
 fi
+if [ -z "${DB_HOST:-}" ]; then
+    read -rp "IP privada de la VM de MySQL (Enter = instalar MySQL en esta misma VM): " DB_HOST
+fi
 DB_HOST="${DB_HOST:-localhost}"
 LOCAL=$([ "$DB_HOST" = "localhost" ] && echo si || echo no)
 
@@ -45,7 +48,7 @@ apt-get update -qq
 if [ "$LOCAL" = si ]; then
     apt-get install -y -qq openjdk-17-jdk-headless mysql-server curl openssl >/dev/null
     # MySQL con poca memoria para que quepa junto al backend; solo escucha dentro de la VM.
-    cat > /etc/mysql/mysql.conf.d/gdi.cnf <<'CNF'
+    cat > /etc/mysql/mysql.conf.d/zz-gdi.cnf <<'CNF'
 [mysqld]
 bind-address = 127.0.0.1
 innodb_buffer_pool_size = 128M
@@ -144,7 +147,7 @@ for _ in $(seq 1 80); do
     if curl -sf http://localhost:8080/api/agenda/configuracion >/dev/null; then
         IP=$(curl -s --max-time 5 https://ifconfig.me || true)
         echo
-        echo "Listo. MySQL y el backend están corriendo; el backend responde en el puerto 8080."
+        echo "Listo. El backend está corriendo y responde en el puerto 8080."
         echo "En la laptop, en frontend/js/config.js pon:  window.GDI_API_URL = 'http://${IP:-IP-PUBLICA-DE-LA-VM}:8080/api';"
         exit 0
     fi
