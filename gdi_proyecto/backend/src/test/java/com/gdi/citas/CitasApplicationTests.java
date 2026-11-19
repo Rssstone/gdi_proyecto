@@ -4,9 +4,11 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -24,6 +26,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -35,6 +38,10 @@ import com.gdi.citas.model.Paciente;
 import com.gdi.citas.model.Rol;
 import com.gdi.citas.model.Usuario;
 import com.gdi.citas.repository.CitaRepository;
+import com.gdi.citas.repository.DienteOdontogramaRepository;
+import com.gdi.citas.repository.EstudioRepository;
+import com.gdi.citas.repository.ExpedienteRepository;
+import com.gdi.citas.repository.FichaTecnicaRepository;
 import com.gdi.citas.repository.PacienteRepository;
 import com.gdi.citas.repository.UsuarioRepository;
 
@@ -60,6 +67,10 @@ class CitasApplicationTests {
     @Autowired CitaRepository citas;
     @Autowired PacienteRepository pacientes;
     @Autowired UsuarioRepository usuarios;
+    @Autowired ExpedienteRepository expedientes;
+    @Autowired DienteOdontogramaRepository dientes;
+    @Autowired FichaTecnicaRepository fichas;
+    @Autowired EstudioRepository estudios;
 
     MockMvc mvc;
     Paciente juan;
@@ -69,6 +80,10 @@ class CitasApplicationTests {
     @BeforeEach
     void preparar() {
         mvc = MockMvcBuilders.webAppContextSetup(context).build();
+        estudios.deleteAll();
+        fichas.deleteAll();
+        dientes.deleteAll();
+        expedientes.deleteAll();
         citas.deleteAll();
         pacientes.deleteAll();
         usuarios.deleteAll();
@@ -270,6 +285,129 @@ class CitasApplicationTests {
         mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"ana@clinica.com\",\"password\":\"mala\"}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    /* ---------- Urgencias (sobrecupo) ---------- */
+
+    @Test
+    void unaUrgenciaSeAtiendeComoSobrecupo() throws Exception {
+        crear(juan, HOY, "10:30").andExpect(status().isCreated());
+        // María llega con un bracket despegado: se le atiende a las 10:35 aunque Juan ya tiene cita.
+        urgencia(maria, HOY, "10:35", 15).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.urgente").value(true))
+                .andExpect(jsonPath("$.horaFin").value("10:50"));
+
+        // La urgencia no le quita el espacio a nadie: el horario de las 11:00 sigue disponible.
+        mvc.perform(get("/api/agenda/disponibilidad").param("fecha", HOY.toString()))
+                .andExpect(jsonPath("$.espacios[?(@.hora=='10:30')].urgencias[0].pacienteNombre").value("María García"))
+                .andExpect(jsonPath("$.espacios[?(@.hora=='11:00')].estado").value("DISPONIBLE"));
+        crear(maria, HOY, "11:00").andExpect(status().isCreated());
+    }
+
+    @Test
+    void lasUrgenciasRespetanElHorarioDeAtencion() throws Exception {
+        urgencia(juan, HOY, "10:00", 15).andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.mensaje", containsString("ya pasó")));
+        urgencia(juan, HOY, "18:55", 15).andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.mensaje", containsString("horario de atención")));
+        urgencia(juan, HOY, "10:12", 15).andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.mensaje", containsString("múltiplos de 5")));
+        urgencia(juan, DOMINGO, "11:00", 15).andExpect(status().isUnprocessableContent());
+        urgencia(juan, HOY, "10:10", 20).andExpect(status().isCreated());
+    }
+
+    @Test
+    void unPacienteNoPuedeTenerUrgenciaYCitaAlMismoTiempo() throws Exception {
+        crear(juan, HOY, "11:00").andExpect(status().isCreated());
+        urgencia(juan, HOY, "11:10", 15).andExpect(status().isConflict());
+    }
+
+    /* ---------- Expediente y odontograma ---------- */
+
+    @Test
+    void guardaElExpedienteYElOdontograma() throws Exception {
+        mvc.perform(put("/api/pacientes/" + juan.getId() + "/expediente").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"alergias\":\"Penicilina\",\"antecedentesPersonales\":\"Diabetes tipo 2\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.alergias").value("Penicilina"));
+
+        mvc.perform(put("/api/pacientes/" + juan.getId() + "/odontograma/16").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"Caries\",\"superficies\":[\"M\",\"O\",\"O\"],\"descripcion\":\"Caries profunda\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.superficies", hasSize(2)));
+        mvc.perform(put("/api/pacientes/" + juan.getId() + "/odontograma/21").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"Corona\",\"superficies\":[\"O\"]}"))
+                .andExpect(jsonPath("$.superficies", hasSize(0)));
+
+        mvc.perform(get("/api/pacientes/" + juan.getId() + "/expediente"))
+                .andExpect(jsonPath("$.dientes", hasSize(2)))
+                .andExpect(jsonPath("$.dientes[0].numero").value(16))
+                .andExpect(jsonPath("$.dientes[0].superficies[0]").value("O"));
+
+        // Al marcarlo sano sin notas, el diente deja de guardarse.
+        mvc.perform(put("/api/pacientes/" + juan.getId() + "/odontograma/21").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"estado\":\"Sano\"}")).andExpect(status().isOk());
+        mvc.perform(get("/api/pacientes/" + juan.getId() + "/expediente")).andExpect(jsonPath("$.dientes", hasSize(1)));
+
+        mvc.perform(put("/api/pacientes/" + juan.getId() + "/odontograma/19").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"estado\":\"Caries\"}")).andExpect(status().isUnprocessableContent());
+    }
+
+    /* ---------- Módulo técnico ---------- */
+
+    @Test
+    void registraLaFichaTecnicaDeUnaCorona() throws Exception {
+        String ficha = """
+                {"pacienteId":%d,"odontologoId":%d,"tipoTrabajo":"Corona","piezas":"14 ,15,16","material":"Zirconia",
+                 "colorVita":"A2","anchoMm":10.5,"altoMm":7.2,"grosorMm":1.5,"terminacion":"Chamfer",
+                 "fechaToma":"%s","fechaEntrega":"%s"}
+                """.formatted(juan.getId(), dra.getId(), HOY, HOY.plusDays(10));
+        mvc.perform(post("/api/fichas-tecnicas").contentType(MediaType.APPLICATION_JSON).content(ficha))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.piezas").value("14, 15, 16"))
+                .andExpect(jsonPath("$.anchoMm").value(10.5));
+        mvc.perform(get("/api/fichas-tecnicas").param("pacienteId", juan.getId().toString()))
+                .andExpect(jsonPath("$", hasSize(1)));
+
+        mvc.perform(post("/api/fichas-tecnicas").contentType(MediaType.APPLICATION_JSON)
+                        .content(ficha.replace("\"A2\"", "\"Z9\"")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.campos.colorVita").exists());
+        mvc.perform(post("/api/fichas-tecnicas").contentType(MediaType.APPLICATION_JSON)
+                        .content(ficha.replace(HOY.plusDays(10).toString(), HOY.minusDays(1).toString())))
+                .andExpect(status().isUnprocessableContent());
+    }
+
+    /* ---------- Estudios ---------- */
+
+    @Test
+    void subeYMuestraUnaRadiografia() throws Exception {
+        byte[] png = {(byte) 0x89, 'P', 'N', 'G'};
+        String respuesta = mvc.perform(multipart("/api/pacientes/" + juan.getId() + "/estudios")
+                        .file(new MockMultipartFile("archivo", "rx.png", "image/png", png))
+                        .param("tipo", "Radiografía").param("descripcion", "Panorámica"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tamano").value(4))
+                .andReturn().getResponse().getContentAsString();
+        int id = Integer.parseInt(respuesta.replaceAll(".*\"id\":(\\d+).*", "$1"));
+
+        mvc.perform(get("/api/estudios/" + id + "/archivo"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("image/png"))
+                .andExpect(content().bytes(png));
+        mvc.perform(get("/api/pacientes/" + juan.getId() + "/estudios")).andExpect(jsonPath("$", hasSize(1)));
+
+        mvc.perform(multipart("/api/pacientes/" + juan.getId() + "/estudios")
+                        .file(new MockMultipartFile("archivo", "virus.exe", "application/octet-stream", png))
+                        .param("tipo", "Radiografía"))
+                .andExpect(status().isUnprocessableContent());
+    }
+
+    private ResultActions urgencia(Paciente p, LocalDate fecha, String hora, int minutos) throws Exception {
+        String cuerpo = """
+                {"pacienteId":%d,"odontologoId":%d,"fecha":"%s","hora":"%s","duracionMinutos":%d,
+                 "motivo":"Urgencia: bracket despegado","urgente":true}
+                """.formatted(p.getId(), dra.getId(), fecha, hora, minutos);
+        return mvc.perform(post("/api/citas").contentType(MediaType.APPLICATION_JSON).content(cuerpo));
     }
 
     private ResultActions crear(Paciente p, LocalDate fecha, String hora) throws Exception {

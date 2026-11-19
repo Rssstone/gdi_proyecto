@@ -43,6 +43,7 @@ CREATE TABLE citas (
     motivo VARCHAR(255),
     estado ENUM('Programada', 'Confirmada', 'Cancelada', 'Completada', 'Inasistencia') DEFAULT 'Programada',
     notas_recepcion TEXT,
+    urgente BOOLEAN NOT NULL DEFAULT FALSE,  -- urgencia atendida como sobrecupo
     FOREIGN KEY (paciente_id) REFERENCES pacientes(id) ON DELETE CASCADE,
     FOREIGN KEY (odontologo_id) REFERENCES usuarios(id) ON DELETE SET NULL
 );
@@ -61,10 +62,47 @@ CREATE TABLE tratamientos (
 CREATE TABLE odontogramas (
     id INT AUTO_INCREMENT PRIMARY KEY,
     expediente_id INT NOT NULL,
-    numero_diente INT NOT NULL,
+    numero_diente INT NOT NULL,             -- numeración FDI (11 a 48)
     estado_diente VARCHAR(100),
+    superficies VARCHAR(20),                -- caras afectadas: O, M, D, V, L
     descripcion TEXT,
+    UNIQUE KEY uk_odontograma_diente (expediente_id, numero_diente),
     FOREIGN KEY (expediente_id) REFERENCES expedientes(id) ON DELETE CASCADE
+);
+
+-- Módulo técnico: especificaciones de coronas, puentes y prótesis que toma el odontólogo.
+CREATE TABLE fichas_tecnicas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    paciente_id INT NOT NULL,
+    odontologo_id INT,
+    tipo_trabajo VARCHAR(30) NOT NULL,
+    piezas VARCHAR(60) NOT NULL,            -- numeración FDI, ej. "14, 15, 16"
+    material VARCHAR(60) NOT NULL,
+    color_vita VARCHAR(10),                 -- guía de color VITA (A1 a D4)
+    ancho_mm DECIMAL(5,2),
+    alto_mm DECIMAL(5,2),
+    grosor_mm DECIMAL(5,2),
+    terminacion VARCHAR(40),
+    laboratorio VARCHAR(120),
+    fecha_toma DATE NOT NULL,
+    fecha_entrega DATE,
+    notas TEXT,
+    FOREIGN KEY (paciente_id) REFERENCES pacientes(id) ON DELETE CASCADE,
+    FOREIGN KEY (odontologo_id) REFERENCES usuarios(id) ON DELETE SET NULL
+);
+
+-- Radiografías, tomografías y fotografías del expediente.
+CREATE TABLE estudios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    paciente_id INT NOT NULL,
+    tipo VARCHAR(30) NOT NULL,
+    descripcion VARCHAR(255),
+    nombre_archivo VARCHAR(255) NOT NULL,
+    tipo_mime VARCHAR(100) NOT NULL,
+    tamano BIGINT NOT NULL,
+    archivo LONGBLOB NOT NULL,
+    fecha DATETIME NOT NULL,
+    FOREIGN KEY (paciente_id) REFERENCES pacientes(id) ON DELETE CASCADE
 );
 
 CREATE TABLE pagos (

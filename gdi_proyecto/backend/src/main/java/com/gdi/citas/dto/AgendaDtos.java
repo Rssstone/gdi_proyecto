@@ -31,7 +31,22 @@ public final class AgendaDtos {
             EstadoCita estadoCita,
             @JsonFormat(pattern = "HH:mm") LocalTime citaInicio,
             @JsonFormat(pattern = "HH:mm") LocalTime citaFin,
-            boolean continuacion) {
+            boolean continuacion,
+            List<UrgenciaEspacio> urgencias) {
+
+        /** Copia del espacio con las urgencias (sobrecupos) que empiezan dentro de él. */
+        public Espacio conUrgencias(List<UrgenciaEspacio> lista) {
+            return new Espacio(hora, estado, citaId, pacienteNombre, estadoCita, citaInicio, citaFin, continuacion, lista);
+        }
+    }
+
+    /** Urgencia atendida como sobrecupo dentro de un espacio de la agenda. */
+    public record UrgenciaEspacio(
+            Integer citaId,
+            String pacienteNombre,
+            EstadoCita estadoCita,
+            @JsonFormat(pattern = "HH:mm") LocalTime inicio,
+            @JsonFormat(pattern = "HH:mm") LocalTime fin) {
     }
 
     public record Disponibilidad(

@@ -49,6 +49,10 @@ public class Cita {
     @Column(name = "notas_recepcion", columnDefinition = "TEXT")
     private String notasRecepcion;
 
+    /** Urgencia atendida como sobrecupo: no bloquea la agenda normal del odontólogo. */
+    @Column(nullable = false, columnDefinition = "BOOLEAN NOT NULL DEFAULT FALSE")
+    private boolean urgente;
+
     public LocalDateTime getInicio() {
         return LocalDateTime.of(fecha, hora);
     }
@@ -88,4 +92,7 @@ public class Cita {
 
     public String getNotasRecepcion() { return notasRecepcion; }
     public void setNotasRecepcion(String notasRecepcion) { this.notasRecepcion = notasRecepcion; }
+
+    public boolean isUrgente() { return urgente; }
+    public void setUrgente(boolean urgente) { this.urgente = urgente; }
 }

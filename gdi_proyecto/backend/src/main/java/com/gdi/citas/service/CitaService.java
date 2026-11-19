@@ -71,7 +71,7 @@ public class CitaService {
     public CitaResponse crear(CitaRequest req) {
         Cita cita = new Cita();
         aplicarDatos(cita, req);
-        agenda.validarHorario(cita.getFecha(), cita.getHora(), cita.getDuracionMinutos());
+        validarHorario(cita);
         validarConflictos(cita);
         cita.setEstado(EstadoCita.Programada);
         return aRespuesta(citaRepository.save(cita));
@@ -92,7 +92,7 @@ public class CitaService {
                 || !Objects.equals(req.odontologoId(), cita.getOdontologo() == null ? null : cita.getOdontologo().getId());
 
         aplicarDatos(cita, req);
-        agenda.validarHorario(cita.getFecha(), cita.getHora(), cita.getDuracionMinutos());
+        validarHorario(cita);
         validarConflictos(cita);
         if (reprogramada) {
             // Un cambio de horario requiere volver a confirmar con el paciente.
@@ -163,12 +163,29 @@ public class CitaService {
         cita.setMotivo(req.motivo().trim());
         cita.setNotasRecepcion(req.notasRecepcion() == null || req.notasRecepcion().isBlank()
                 ? null : req.notasRecepcion().trim());
+        cita.setUrgente(req.esUrgente());
     }
 
-    /** Rechaza la cita si su rango [hora, hora + duración) se encima con otra cita activa. */
+    /** Una cita normal debe caer en un espacio de la agenda; una urgencia solo dentro del horario de atención. */
+    private void validarHorario(Cita cita) {
+        if (cita.isUrgente()) {
+            agenda.validarUrgencia(cita.getFecha(), cita.getHora(), cita.getDuracionMinutos());
+        } else {
+            agenda.validarHorario(cita.getFecha(), cita.getHora(), cita.getDuracionMinutos());
+        }
+    }
+
+    /**
+     * Rechaza la cita si su rango [hora, hora + duración) se encima con otra cita activa. Las urgencias son
+     * sobrecupo: no chocan con la agenda del odontólogo ni la bloquean; solo se evita que el mismo paciente
+     * tenga dos citas al mismo tiempo.
+     */
     private void validarConflictos(Cita cita) {
+        Integer pacienteId = cita.getPaciente().getId();
         citaRepository.buscarPosiblesConflictos(cita.getFecha(), cita.getOdontologo().getId(),
-                        cita.getPaciente().getId(), cita.getId(), EstadoCita.OCUPAN_HORARIO).stream()
+                        pacienteId, cita.getId(), EstadoCita.OCUPAN_HORARIO).stream()
+                .filter(otra -> otra.getPaciente().getId().equals(pacienteId)
+                        || (!cita.isUrgente() && !otra.isUrgente()))
                 .filter(otra -> otra.seEmpalmaCon(cita.getHora(), cita.getHoraFin()))
                 .findFirst()
                 .ifPresent(otra -> {

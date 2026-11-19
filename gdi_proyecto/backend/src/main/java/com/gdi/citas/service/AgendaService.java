@@ -29,6 +29,7 @@ import com.gdi.citas.dto.AgendaDtos.EstadoDia;
 import com.gdi.citas.dto.AgendaDtos.EstadoEspacio;
 import com.gdi.citas.dto.AgendaDtos.HorarioDia;
 import com.gdi.citas.dto.AgendaDtos.ResumenDia;
+import com.gdi.citas.dto.AgendaDtos.UrgenciaEspacio;
 import com.gdi.citas.exception.ReglaNegocioException;
 import com.gdi.citas.model.Cita;
 import com.gdi.citas.model.EstadoCita;
@@ -40,6 +41,9 @@ public class AgendaService {
 
     private static final Locale ES_MX = Locale.forLanguageTag("es-MX");
     private static final int MAX_DIAS_RESUMEN = 93;
+    /** Las urgencias se registran en pasos de 5 minutos y duran como máximo una hora. */
+    private static final int MINUTOS_URGENCIA = 5;
+    private static final int MAX_URGENCIA = 60;
     /** Estados que se muestran en la agenda (las canceladas liberan el espacio). */
     private static final EnumSet<EstadoCita> VISIBLES = EnumSet.complementOf(EnumSet.of(EstadoCita.Cancelada));
 
@@ -110,6 +114,33 @@ public class AgendaService {
     }
 
     /**
+     * Valida una urgencia (sobrecupo): puede empezar a cualquier hora en múltiplos de 5 minutos dentro del horario
+     * de atención, no en el pasado, y debe terminar antes del cierre. No se exige un espacio libre.
+     */
+    public void validarUrgencia(LocalDate fecha, LocalTime hora, int duracionMinutos) {
+        LocalDateTime ahora = ahora();
+        if (fecha.isBefore(ahora.toLocalDate())) {
+            throw new ReglaNegocioException("No se pueden registrar urgencias en fechas pasadas.");
+        }
+        Horario horario = horario(fecha).orElseThrow(() -> new ReglaNegocioException(
+                "La clínica no atiende los " + nombreDia(fecha.getDayOfWeek()) + "."));
+        if (hora.getMinute() % MINUTOS_URGENCIA != 0) {
+            throw new ReglaNegocioException("La hora de la urgencia debe ir en múltiplos de " + MINUTOS_URGENCIA + " minutos.");
+        }
+        if (duracionMinutos > MAX_URGENCIA || duracionMinutos % MINUTOS_URGENCIA != 0) {
+            throw new ReglaNegocioException("Una urgencia dura de 10 a " + MAX_URGENCIA + " minutos, en múltiplos de "
+                    + MINUTOS_URGENCIA + ".");
+        }
+        if (hora.isBefore(horario.getApertura()) || !cabeAntesDelCierre(hora, duracionMinutos, horario)) {
+            throw new ReglaNegocioException("La urgencia debe atenderse dentro del horario de atención ("
+                    + horario.getApertura() + " a " + horario.getCierre() + ").");
+        }
+        if (LocalDateTime.of(fecha, hora).isBefore(ahora)) {
+            throw new ReglaNegocioException("Esa hora ya pasó. Elige " + ahora.toLocalTime() + " o después.");
+        }
+    }
+
+    /**
      * Estado de cada horario del día. Con {@code duracionMinutos} mayor a un bloque, un horario libre
      * solo se marca DISPONIBLE si la cita completa cabe sin encimarse con otra ni pasar del cierre.
      */
@@ -133,19 +164,19 @@ public class AgendaService {
             if (cubre.isPresent()) {
                 Cita c = cubre.get();
                 return new Espacio(hora, EstadoEspacio.OCUPADO, c.getId(), c.getPaciente().getNombreCompleto(),
-                        c.getEstado(), c.getHora(), c.getHoraFin(), !c.getHora().equals(hora));
+                        c.getEstado(), c.getHora(), c.getHoraFin(), !c.getHora().equals(hora), List.of());
             }
             if (!LocalDateTime.of(fecha, hora).isAfter(ahora)) {
                 // Hora pasada; si ahí había una cita a la que el paciente no llegó, se informa para mostrarla.
                 return inasistenciaQueCubre(citas, hora, hora.plusMinutes(bloque))
                         .map(c -> new Espacio(hora, EstadoEspacio.PASADO, c.getId(), c.getPaciente().getNombreCompleto(),
-                                c.getEstado(), c.getHora(), c.getHoraFin(), !c.getHora().equals(hora)))
+                                c.getEstado(), c.getHora(), c.getHoraFin(), !c.getHora().equals(hora), List.of()))
                         .orElseGet(() -> libre(hora, EstadoEspacio.PASADO));
             }
             boolean alcanza = cabeAntesDelCierre(hora, duracion, horario.get())
                     && citaQueCubre(citas, hora, hora.plusMinutes(duracion)).isEmpty();
             return libre(hora, alcanza ? EstadoEspacio.DISPONIBLE : EstadoEspacio.INSUFICIENTE);
-        }).toList();
+        }).map(e -> e.conUrgencias(urgenciasQueEmpiezan(citas, e.hora(), e.hora().plusMinutes(bloque)))).toList();
 
         int disponibles = (int) espacios.stream().filter(e -> e.estado() == EstadoEspacio.DISPONIBLE).count();
         String mensaje = fecha.isBefore(ahora.toLocalDate()) ? "Fecha pasada: solo consulta."
@@ -208,11 +239,23 @@ public class AgendaService {
                 .toList();
     }
 
-    /** Cita que ocupa algún minuto del rango (las de inasistencia no ocupan: liberan su horario). */
+    /**
+     * Cita que ocupa algún minuto del rango. Las de inasistencia no ocupan (liberan su horario) y las urgencias
+     * tampoco: se atienden como sobrecupo sin quitarle el espacio a los demás pacientes.
+     */
     private static Optional<Cita> citaQueCubre(List<Cita> citas, LocalTime inicio, LocalTime fin) {
         return citas.stream()
-                .filter(c -> EstadoCita.OCUPAN_HORARIO.contains(c.getEstado()) && c.seEmpalmaCon(inicio, fin))
+                .filter(c -> !c.isUrgente() && EstadoCita.OCUPAN_HORARIO.contains(c.getEstado()) && c.seEmpalmaCon(inicio, fin))
                 .findFirst();
+    }
+
+    /** Urgencias que empiezan dentro del bloque [inicio, fin), para mostrarlas en la agenda. */
+    private static List<UrgenciaEspacio> urgenciasQueEmpiezan(List<Cita> citas, LocalTime inicio, LocalTime fin) {
+        return citas.stream()
+                .filter(c -> c.isUrgente() && !c.getHora().isBefore(inicio) && c.getHora().isBefore(fin))
+                .map(c -> new UrgenciaEspacio(c.getId(), c.getPaciente().getNombreCompleto(), c.getEstado(),
+                        c.getHora(), c.getHoraFin()))
+                .toList();
     }
 
     private static Optional<Cita> inasistenciaQueCubre(List<Cita> citas, LocalTime inicio, LocalTime fin) {
@@ -227,7 +270,7 @@ public class AgendaService {
     }
 
     private static Espacio libre(LocalTime hora, EstadoEspacio estado) {
-        return new Espacio(hora, estado, null, null, null, null, null, false);
+        return new Espacio(hora, estado, null, null, null, null, null, false, List.of());
     }
 
     private static String nombreDia(DayOfWeek dia) {

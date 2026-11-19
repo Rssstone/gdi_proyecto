@@ -21,7 +21,8 @@ public record CitaResponse(
         String pacienteTelefono,
         Integer odontologoId,
         String odontologoNombre,
-        boolean pasada) {
+        boolean pasada,
+        boolean urgente) {
 
     public static CitaResponse de(Cita c, boolean pasada) {
         var p = c.getPaciente();
@@ -30,6 +31,6 @@ public record CitaResponse(
                 c.getNotasRecepcion(),
                 p.getId(), p.getNombreCompleto(), p.getTelefono(),
                 o == null ? null : o.getId(), o == null ? null : o.getNombreCompleto(),
-                pasada);
+                pasada, c.isUrgente());
     }
 }
