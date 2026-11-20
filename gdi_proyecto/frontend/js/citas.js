@@ -15,7 +15,7 @@ const URGENCIAS = [
     ['Bracket despegado', 15], ['Dolor dental agudo', 30], ['Diente fracturado', 30],
     ['Corona o provisional despegado', 20], ['Inflamación o infección', 30], ['Sangrado después de una extracción', 20],
 ];
-const DURACIONES = [30, 60, 90, 120, 150, 180, 210, 240];
+const DURACIONES = [15, 20, 30, 40, 45, 60, 75, 90, 120, 150, 180, 210, 240];
 const DURACIONES_URGENCIA = [10, 15, 20, 30, 45, 60];
 const OTRO = '__otro';
 
@@ -315,12 +315,13 @@ const CitasVista = {
                         <span class="campo__error" data-error="duracionMinutos"></span>
                     </label>
                 </div>
-                <label class="campo" id="campo-hora">
-                    <span class="campo__etiqueta">Horarios disponibles <b class="req">*</b></span>
-                    <select name="hora"></select>
+                <div class="campo" id="campo-hora">
+                    <label class="campo__etiqueta" for="cita-hora">Hora <b class="req">*</b></label>
+                    <input type="time" name="hora" id="cita-hora" step="300">
                     <span class="campo__ayuda" id="cita-hora-ayuda"></span>
+                    <div class="libres" id="cita-libres"></div>
                     <span class="campo__error" data-error="hora"></span>
-                </label>
+                </div>
                 <label class="campo" id="campo-hora-urgencia" hidden>
                     <span class="campo__etiqueta">Hora de atención <b class="req">*</b></span>
                     <input type="time" name="horaUrgencia" step="300">
@@ -389,61 +390,69 @@ const CitasVista = {
                 this.abrirFormulario(c ? { cita: { ...c, ...aCita(borrador(), nuevo) } } : { ...borrador(), paciente: nuevo })),
         });
 
-        /* Debajo de la lista: a qué hora terminaría la cita con la duración elegida. */
+        /* Debajo de la hora: a qué hora terminaría la cita y si cabe en un espacio libre. */
+        const horarioDe = fecha => App.config.horarios[['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][Fecha.aDate(fecha).getDay()]];
+        let libres = [];
         const pintarFin = () => {
             const ayuda = cuerpo.querySelector('#cita-hora-ayuda');
             const hora = form.hora.value;
-            ayuda.textContent = hora
-                ? `La cita sería de ${Fecha.hora12(hora)} a ${Fecha.hora12(sumarMinutos(hora, Number(form.duracionMinutos.value)))}`
-                : `Solo aparecen los horarios en los que cabe la cita completa (${Fecha.duracion(Number(form.duracionMinutos.value))}).`;
+            if (!hora) {
+                ayuda.textContent = 'Escribe la hora exacta (ej. 4:10 p. m.) o toca un espacio libre.';
+                ayuda.classList.remove('campo__ayuda--alerta');
+                return;
+            }
+            const fin = sumarMinutos(hora, Number(form.duracionMinutos.value));
+            const cabe = libres.some(t => hora >= t.inicio && fin <= t.fin);
+            ayuda.textContent = cabe
+                ? `La cita sería de ${Fecha.hora12(hora)} a ${Fecha.hora12(fin)}`
+                : `De ${Fecha.hora12(hora)} a ${Fecha.hora12(fin)} no está libre: se encima con otra cita o pasa del cierre. Elige una hora dentro de los espacios libres.`;
+            ayuda.classList.toggle('campo__ayuda--alerta', !cabe);
         };
 
-        /* ---- Cita programada: lista de horas libres en las que cabe la cita completa ---- */
+        /* ---- Cita programada: hora libre (pasos de 5 min) y espacios libres del día como guía ---- */
         const cargarHoras = async () => {
-            const ayuda = cuerpo.querySelector('#cita-hora-ayuda');
-            const select = form.hora;
+            const lista = cuerpo.querySelector('#cita-libres');
             limpiarError('fecha');
             limpiarError('hora');
             const fecha = form.fecha.value;
-            const sinOpciones = texto => {
-                select.innerHTML = `<option value="">${esc(texto)}</option>`;
-                select.disabled = true;
-                ayuda.textContent = '';
-            };
-            if (!fecha) return sinOpciones('Primero elige una fecha');
+            const h = fecha && horarioDe(fecha);
+            form.hora.min = h?.apertura || '';
+            form.hora.max = h?.cierre || '';
+            libres = [];
+            const aviso = html => { lista.innerHTML = `<span class="libres__aviso">${html}</span>`; pintarFin(); };
+            if (!fecha) return aviso('Primero elige una fecha.');
             if (fecha < App.hoy) {
                 form.fecha.classList.add('invalido');
-                return sinOpciones('No se pueden agendar citas en fechas pasadas');
+                return aviso('No se pueden agendar citas en fechas pasadas.');
             }
-            select.disabled = true;
-            select.innerHTML = '<option value="">Buscando horarios libres…</option>';
+            lista.innerHTML = '<span class="libres__aviso">Buscando espacios libres…</span>';
             try {
                 const duracion = Number(form.duracionMinutos.value);
                 const disp = await Api.disponibilidad(fecha, form.odontologoId.value, estado.id, duracion);
                 if (esUrgencia()) return;
                 if (!disp.abierto) {
                     form.fecha.classList.add('invalido');
-                    return sinOpciones(disp.mensaje);
+                    return aviso(esc(disp.mensaje));
                 }
-                const libres = disp.espacios.filter(e => e.estado === 'DISPONIBLE');
+                libres = disp.libres || [];
                 if (!libres.length) {
-                    sinOpciones('No hay horarios libres este día');
-                    ayuda.innerHTML = 'Elige otra fecha. Si el paciente tiene una urgencia, cambia el tipo de cita a <b>Urgencia</b>.';
-                    return;
+                    return aviso(`No hay espacio libre para ${Fecha.duracion(duracion)} este día. Elige otra fecha o, si es una urgencia, cambia el tipo a <b>Urgencia</b>.`);
                 }
-                select.disabled = false;
-                select.innerHTML = `<option value="">Elige un horario (${libres.length} disponibles)</option>` + libres.map(e =>
-                    `<option value="${e.hora}">${Fecha.hora12(e.hora)}</option>`).join('');
-                select.value = libres.some(e => e.hora === estado.hora) ? estado.hora : '';
+                lista.innerHTML = '<span class="libres__titulo">Espacios libres:</span>' + libres.map(t =>
+                    `<button type="button" class="chip" data-inicio="${t.inicio}">${Fecha.hora12(t.inicio)} – ${Fecha.hora12(t.fin)}</button>`).join('');
+                lista.querySelectorAll('[data-inicio]').forEach(b => b.onclick = () => {
+                    form.hora.value = b.dataset.inicio;
+                    limpiarError('hora');
+                    pintarFin();
+                });
+                if (!form.hora.value && estado.hora) form.hora.value = estado.hora;
                 pintarFin();
             } catch (err) {
-                sinOpciones('No se pudieron cargar los horarios');
-                ayuda.textContent = err.message;
+                aviso(esc(err.message));
             }
         };
 
         /* ---- Urgencia: hora libre dentro del horario de atención; avisa con quién se encima ---- */
-        const horarioDe = fecha => App.config.horarios[['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'][Fecha.aDate(fecha).getDay()]];
         const horaSugerida = fecha => {
             const h = horarioDe(fecha);
             if (!h) return '';
@@ -521,7 +530,7 @@ const CitasVista = {
         };
         form.odontologoId.onchange = actualizar;
         form.duracionMinutos.onchange = actualizar;
-        form.hora.onchange = () => { limpiarError('hora'); pintarFin(); };
+        form.hora.oninput = () => { limpiarError('hora'); pintarFin(); };
         form.horaUrgencia.onchange = revisarUrgencia;
         aplicarTipo(estado.motivo, estado.duracion);
 
@@ -536,7 +545,7 @@ const CitasVista = {
             if (!estado.paciente) errores.pacienteId = 'Selecciona o registra un paciente.';
             if (!form.fecha.value) errores.fecha = 'Elige una fecha.';
             else if (form.fecha.value < App.hoy) errores.fecha = 'No se pueden agendar citas en fechas pasadas.';
-            if (!hora) errores[urg ? 'horaUrgencia' : 'hora'] = urg ? 'Indica la hora de atención.' : 'Elige uno de los horarios disponibles.';
+            if (!hora) errores[urg ? 'horaUrgencia' : 'hora'] = urg ? 'Indica la hora de atención.' : 'Indica la hora de la cita.';
             if (motivo.length < 3) errores.motivo = form.procedimiento.value === OTRO ? 'Describe el motivo (mínimo 3 caracteres).' : 'Elige el procedimiento.';
             if (Object.keys(errores).length) return mostrarErrores(errores);
 

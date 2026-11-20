@@ -29,6 +29,7 @@ import com.gdi.citas.dto.AgendaDtos.EstadoDia;
 import com.gdi.citas.dto.AgendaDtos.EstadoEspacio;
 import com.gdi.citas.dto.AgendaDtos.HorarioDia;
 import com.gdi.citas.dto.AgendaDtos.ResumenDia;
+import com.gdi.citas.dto.AgendaDtos.Tramo;
 import com.gdi.citas.dto.AgendaDtos.UrgenciaEspacio;
 import com.gdi.citas.exception.ReglaNegocioException;
 import com.gdi.citas.model.Cita;
@@ -41,8 +42,11 @@ public class AgendaService {
 
     private static final Locale ES_MX = Locale.forLanguageTag("es-MX");
     private static final int MAX_DIAS_RESUMEN = 93;
-    /** Las urgencias se registran en pasos de 5 minutos y duran como máximo una hora. */
-    private static final int MINUTOS_URGENCIA = 5;
+    /**
+     * Las citas (programadas y urgencias) empiezan a cualquier hora en pasos de 5 minutos (ej. 16:10), porque el
+     * paciente no siempre puede llegar a una hora en punto. Las urgencias duran como máximo una hora.
+     */
+    private static final int MINUTOS_PASO = 5;
     private static final int MAX_URGENCIA = 60;
     /** Estados que se muestran en la agenda (las canceladas liberan el espacio). */
     private static final EnumSet<EstadoCita> VISIBLES = EnumSet.complementOf(EnumSet.of(EstadoCita.Cancelada));
@@ -69,7 +73,7 @@ public class AgendaService {
         return Optional.ofNullable(clinica.getHorarios().get(fecha.getDayOfWeek()));
     }
 
-    /** Horas de inicio de cita para un día, en intervalos de {@code clinica.intervalo-minutos}. */
+    /** Renglones en que se dibuja la agenda del día, cada {@code clinica.intervalo-minutos} (30 min). */
     public List<LocalTime> espaciosDelDia(LocalDate fecha) {
         List<LocalTime> espacios = new ArrayList<>();
         horario(fecha).ifPresent(h -> {
@@ -83,8 +87,9 @@ public class AgendaService {
     }
 
     /**
-     * Lanza una excepción si la cita no se puede agendar: fecha u hora pasada, día cerrado,
-     * hora fuera de horario o duración que termina después del cierre.
+     * Lanza una excepción si la cita no se puede agendar: fecha u hora pasada, día cerrado, hora fuera de horario,
+     * hora o duración que no van en pasos de 5 minutos, o cita que termina después del cierre.
+     * Que no se encime con otra cita lo revisa CitaService.
      */
     public void validarHorario(LocalDate fecha, LocalTime hora, int duracionMinutos) {
         LocalDateTime ahora = ahora();
@@ -93,14 +98,15 @@ public class AgendaService {
         }
         Horario horario = horario(fecha).orElseThrow(() -> new ReglaNegocioException(
                 "La clínica no atiende los " + nombreDia(fecha.getDayOfWeek()) + "."));
-        if (!espaciosDelDia(fecha).contains(hora)) {
+        if (hora.isBefore(horario.getApertura()) || !hora.isBefore(horario.getCierre())) {
             throw new ReglaNegocioException("La hora debe estar dentro del horario de atención ("
-                    + horario.getApertura() + " a " + horario.getCierre() + ") y en intervalos de "
-                    + clinica.getIntervaloMinutos() + " minutos.");
+                    + horario.getApertura() + " a " + horario.getCierre() + ").");
         }
-        if (duracionMinutos % clinica.getIntervaloMinutos() != 0) {
-            throw new ReglaNegocioException("La duración debe ser múltiplo de "
-                    + clinica.getIntervaloMinutos() + " minutos.");
+        if (hora.getMinute() % MINUTOS_PASO != 0 || hora.getSecond() != 0) {
+            throw new ReglaNegocioException("La hora debe ir en múltiplos de " + MINUTOS_PASO + " minutos (ej. 16:10).");
+        }
+        if (duracionMinutos % MINUTOS_PASO != 0) {
+            throw new ReglaNegocioException("La duración debe ser múltiplo de " + MINUTOS_PASO + " minutos.");
         }
         if (!cabeAntesDelCierre(hora, duracionMinutos, horario)) {
             throw new ReglaNegocioException("Una cita de " + duracionMinutos + " minutos a las " + hora
@@ -124,12 +130,12 @@ public class AgendaService {
         }
         Horario horario = horario(fecha).orElseThrow(() -> new ReglaNegocioException(
                 "La clínica no atiende los " + nombreDia(fecha.getDayOfWeek()) + "."));
-        if (hora.getMinute() % MINUTOS_URGENCIA != 0) {
-            throw new ReglaNegocioException("La hora de la urgencia debe ir en múltiplos de " + MINUTOS_URGENCIA + " minutos.");
+        if (hora.getMinute() % MINUTOS_PASO != 0) {
+            throw new ReglaNegocioException("La hora de la urgencia debe ir en múltiplos de " + MINUTOS_PASO + " minutos.");
         }
-        if (duracionMinutos > MAX_URGENCIA || duracionMinutos % MINUTOS_URGENCIA != 0) {
+        if (duracionMinutos > MAX_URGENCIA || duracionMinutos % MINUTOS_PASO != 0) {
             throw new ReglaNegocioException("Una urgencia dura de 10 a " + MAX_URGENCIA + " minutos, en múltiplos de "
-                    + MINUTOS_URGENCIA + ".");
+                    + MINUTOS_PASO + ".");
         }
         if (hora.isBefore(horario.getApertura()) || !cabeAntesDelCierre(hora, duracionMinutos, horario)) {
             throw new ReglaNegocioException("La urgencia debe atenderse dentro del horario de atención ("
@@ -150,7 +156,7 @@ public class AgendaService {
         Optional<Horario> horario = horario(fecha);
         if (horario.isEmpty()) {
             return new Disponibilidad(fecha, false,
-                    "La clínica no atiende los " + nombreDia(fecha.getDayOfWeek()) + ".", 0, List.of());
+                    "La clínica no atiende los " + nombreDia(fecha.getDayOfWeek()) + ".", 0, List.of(), List.of());
         }
         List<Cita> citas = citasDelRango(fecha, fecha, odontologoId).stream()
                 .filter(c -> !Objects.equals(c.getId(), excluirCitaId))
@@ -163,14 +169,15 @@ public class AgendaService {
             Optional<Cita> cubre = citaQueCubre(citas, hora, hora.plusMinutes(bloque));
             if (cubre.isPresent()) {
                 Cita c = cubre.get();
+                // Continuación: la cita empezó en un renglón anterior (una cita de 16:10 se muestra en el de 16:00).
                 return new Espacio(hora, EstadoEspacio.OCUPADO, c.getId(), c.getPaciente().getNombreCompleto(),
-                        c.getEstado(), c.getHora(), c.getHoraFin(), !c.getHora().equals(hora), List.of());
+                        c.getEstado(), c.getHora(), c.getHoraFin(), c.getHora().isBefore(hora), List.of());
             }
             if (!LocalDateTime.of(fecha, hora).isAfter(ahora)) {
                 // Hora pasada; si ahí había una cita a la que el paciente no llegó, se informa para mostrarla.
                 return inasistenciaQueCubre(citas, hora, hora.plusMinutes(bloque))
                         .map(c -> new Espacio(hora, EstadoEspacio.PASADO, c.getId(), c.getPaciente().getNombreCompleto(),
-                                c.getEstado(), c.getHora(), c.getHoraFin(), !c.getHora().equals(hora), List.of()))
+                                c.getEstado(), c.getHora(), c.getHoraFin(), c.getHora().isBefore(hora), List.of()))
                         .orElseGet(() -> libre(hora, EstadoEspacio.PASADO));
             }
             boolean alcanza = cabeAntesDelCierre(hora, duracion, horario.get())
@@ -179,10 +186,53 @@ public class AgendaService {
         }).map(e -> e.conUrgencias(urgenciasQueEmpiezan(citas, e.hora(), e.hora().plusMinutes(bloque)))).toList();
 
         int disponibles = (int) espacios.stream().filter(e -> e.estado() == EstadoEspacio.DISPONIBLE).count();
+        List<Tramo> libres = tramosLibres(fecha, horario.get(), citas, ahora).stream()
+                .filter(t -> ChronoUnit.MINUTES.between(t.inicio(), t.fin()) >= duracion)
+                .toList();
         String mensaje = fecha.isBefore(ahora.toLocalDate()) ? "Fecha pasada: solo consulta."
-                : disponibles == 0 ? "No hay horarios disponibles en este día."
-                : disponibles + " horario(s) disponible(s).";
-        return new Disponibilidad(fecha, true, mensaje, disponibles, espacios);
+                : libres.isEmpty() ? "No hay espacio libre para una cita de " + duracion + " minutos este día."
+                : "Libre: " + libres.stream().map(t -> t.inicio() + " a " + t.fin()).collect(Collectors.joining(", ")) + ".";
+        return new Disponibilidad(fecha, true, mensaje, disponibles, espacios, libres);
+    }
+
+    /**
+     * Tramos del día sin citas que ocupen horario (las urgencias y las inasistencias no ocupan). Si es hoy, empieza en
+     * la hora actual redondeada a los siguientes 5 minutos.
+     */
+    private List<Tramo> tramosLibres(LocalDate fecha, Horario horario, List<Cita> citas, LocalDateTime ahora) {
+        if (fecha.isBefore(ahora.toLocalDate())) {
+            return List.of();
+        }
+        LocalTime desde = horario.getApertura();
+        if (fecha.equals(ahora.toLocalDate())) {
+            LocalTime actual = ahora.toLocalTime();
+            int resto = actual.getMinute() % MINUTOS_PASO;
+            LocalTime redondeada = resto == 0 ? actual : actual.plusMinutes(MINUTOS_PASO - resto);
+            if (redondeada.isBefore(actual)) {
+                return List.of();          // ya pasó la medianoche: no queda tiempo hoy
+            }
+            if (redondeada.isAfter(desde)) {
+                desde = redondeada;
+            }
+        }
+        List<Cita> ocupan = citas.stream()
+                .filter(c -> !c.isUrgente() && EstadoCita.OCUPAN_HORARIO.contains(c.getEstado()))
+                .sorted((a, b) -> a.getHora().compareTo(b.getHora()))
+                .toList();
+        List<Tramo> tramos = new ArrayList<>();
+        LocalTime cursor = desde;
+        for (Cita c : ocupan) {
+            if (c.getHora().isAfter(cursor)) {
+                tramos.add(new Tramo(cursor, c.getHora().isAfter(horario.getCierre()) ? horario.getCierre() : c.getHora()));
+            }
+            if (c.getHoraFin().isAfter(cursor)) {
+                cursor = c.getHoraFin();
+            }
+        }
+        if (cursor.isBefore(horario.getCierre())) {
+            tramos.add(new Tramo(cursor, horario.getCierre()));
+        }
+        return tramos.stream().filter(t -> t.inicio().isBefore(t.fin())).toList();
     }
 
     @Transactional(readOnly = true)

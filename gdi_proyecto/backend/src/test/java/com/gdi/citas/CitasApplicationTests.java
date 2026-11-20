@@ -127,7 +127,29 @@ class CitasApplicationTests {
         crear(juan, DOMINGO, "10:00").andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.mensaje", containsString("domingo")));
         crear(juan, MANANA, "19:00").andExpect(status().isUnprocessableContent());
-        crear(juan, MANANA, "10:15").andExpect(status().isUnprocessableContent());
+        crear(juan, MANANA, "10:17").andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.mensaje", containsString("múltiplos de 5")));
+    }
+
+    @Test
+    void aceptaHorasLibresEnPasosDeCincoMinutos() throws Exception {
+        // El paciente llega a las 16:10: ya no se exige empezar en punto o a la media hora.
+        crear(juan, MANANA, "16:10").andExpect(status().isCreated())
+                .andExpect(jsonPath("$.hora").value("16:10"))
+                .andExpect(jsonPath("$.horaFin").value("16:40"));
+        crear(maria, MANANA, "16:30").andExpect(status().isConflict());   // 16:30–17:00 se encima con 16:10–16:40
+        crear(maria, MANANA, "16:40").andExpect(status().isCreated());    // empieza justo cuando termina la otra
+
+        mvc.perform(get("/api/agenda/disponibilidad").param("fecha", MANANA.toString())
+                        .param("odontologoId", dra.getId().toString()).param("duracion", "30"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.libres", hasSize(2)))
+                .andExpect(jsonPath("$.libres[0].inicio").value("09:00"))
+                .andExpect(jsonPath("$.libres[0].fin").value("16:10"))
+                .andExpect(jsonPath("$.libres[1].inicio").value("17:10"))
+                .andExpect(jsonPath("$.libres[1].fin").value("19:00"))
+                // En la agenda, la cita de 16:10 aparece en el renglón de las 16:00 como inicio, no como continuación.
+                .andExpect(jsonPath("$.espacios[?(@.hora=='16:00')].continuacion").value(false));
     }
 
     @Test
@@ -226,7 +248,7 @@ class CitasApplicationTests {
         mvc.perform(post("/api/citas").contentType(MediaType.APPLICATION_JSON).content(json(juan, MANANA, "18:30", 60)))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.mensaje", containsString("después del cierre")));
-        mvc.perform(post("/api/citas").contentType(MediaType.APPLICATION_JSON).content(json(juan, MANANA, "18:00", 45)))
+        mvc.perform(post("/api/citas").contentType(MediaType.APPLICATION_JSON).content(json(juan, MANANA, "18:00", 42)))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.mensaje", containsString("múltiplo")));
     }
