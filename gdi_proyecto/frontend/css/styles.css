@@ -91,6 +91,10 @@ svg.ic { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none
 .campo { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .campo__etiqueta { font-size: 13px; font-weight: 700; color: var(--gris-700); }
 .campo__ayuda { font-size: 12px; color: var(--gris-500); }
+.campo__ayuda--alerta { color: var(--rojo-600); font-weight: 600; }
+.libres { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.libres__titulo, .libres__aviso { font-size: 12px; color: var(--gris-500); }
+.libres__titulo { font-weight: 700; }
 .campo__error { font-size: 12px; color: var(--rojo-600); font-weight: 600; }
 input[type=text], input[type=email], input[type=password], input[type=date], input[type=time], input[type=number], input[type=file], input[type=tel], input[type=search], select, textarea {
     width: 100%; border: 1px solid var(--gris-300); border-radius: var(--radio-chico);

@@ -49,12 +49,23 @@ public final class AgendaDtos {
             @JsonFormat(pattern = "HH:mm") LocalTime fin) {
     }
 
+    /**
+     * {@code libres}: tramos del día en los que el odontólogo no tiene citas (desde ahora si es hoy). La cita puede
+     * empezar a cualquier hora en múltiplos de 5 minutos siempre que quepa completa dentro de un tramo.
+     */
     public record Disponibilidad(
             LocalDate fecha,
             boolean abierto,
             String mensaje,
             int disponibles,
-            List<Espacio> espacios) {
+            List<Espacio> espacios,
+            List<Tramo> libres) {
+    }
+
+    /** Tramo de tiempo libre en la agenda, por ejemplo de 09:00 a 11:40. */
+    public record Tramo(
+            @JsonFormat(pattern = "HH:mm") LocalTime inicio,
+            @JsonFormat(pattern = "HH:mm") LocalTime fin) {
     }
 
     public record ResumenDia(

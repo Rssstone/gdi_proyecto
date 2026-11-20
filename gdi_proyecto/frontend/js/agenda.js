@@ -125,7 +125,7 @@ const Agenda = {
                 texto = `↳ continúa · ${esc(e.pacienteNombre)}`;
             } else {
                 texto = esc(e.pacienteNombre);
-                sub = `${noAsistio ? 'No asistió' : e.estadoCita} · hasta ${Fecha.hora12(e.citaFin)}`;
+                sub = `${noAsistio ? 'No asistió' : e.estadoCita} · ${Fecha.hora12(e.citaInicio)} a ${Fecha.hora12(e.citaFin)}`;
                 // Ya empezó y sigue pendiente: hay que registrar si llegó o no.
                 if (['Programada', 'Confirmada'].includes(e.estadoCita) && `${this.dia}T${e.citaInicio}` <= App.ahora) {
                     sub = 'Registrar asistencia';
