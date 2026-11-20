@@ -317,14 +317,14 @@ const CitasVista = {
                 </div>
                 <div class="campo" id="campo-hora">
                     <label class="campo__etiqueta" for="cita-hora">Hora <b class="req">*</b></label>
-                    <input type="time" name="hora" id="cita-hora" step="300">
+                    <input type="time" name="hora" id="cita-hora" step="60">
                     <span class="campo__ayuda" id="cita-hora-ayuda"></span>
                     <div class="libres" id="cita-libres"></div>
                     <span class="campo__error" data-error="hora"></span>
                 </div>
                 <label class="campo" id="campo-hora-urgencia" hidden>
                     <span class="campo__etiqueta">Hora de atención <b class="req">*</b></span>
-                    <input type="time" name="horaUrgencia" step="300">
+                    <input type="time" name="horaUrgencia" step="60">
                     <span class="campo__error" data-error="horaUrgencia"></span>
                 </label>
                 <div id="cita-sobrecupo"></div>
@@ -409,7 +409,7 @@ const CitasVista = {
             ayuda.classList.toggle('campo__ayuda--alerta', !cabe);
         };
 
-        /* ---- Cita programada: hora libre (pasos de 5 min) y espacios libres del día como guía ---- */
+        /* ---- Cita programada: hora exacta (cualquier minuto) y espacios libres del día como guía ---- */
         const cargarHoras = async () => {
             const lista = cuerpo.querySelector('#cita-libres');
             limpiarError('fecha');

@@ -127,27 +127,29 @@ class CitasApplicationTests {
         crear(juan, DOMINGO, "10:00").andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.mensaje", containsString("domingo")));
         crear(juan, MANANA, "19:00").andExpect(status().isUnprocessableContent());
-        crear(juan, MANANA, "10:17").andExpect(status().isUnprocessableContent())
-                .andExpect(jsonPath("$.mensaje", containsString("múltiplos de 5")));
     }
 
     @Test
-    void aceptaHorasLibresEnPasosDeCincoMinutos() throws Exception {
+    void aceptaCualquierHoraDentroDelHorario() throws Exception {
         // El paciente llega a las 16:10: ya no se exige empezar en punto o a la media hora.
         crear(juan, MANANA, "16:10").andExpect(status().isCreated())
                 .andExpect(jsonPath("$.hora").value("16:10"))
                 .andExpect(jsonPath("$.horaFin").value("16:40"));
         crear(maria, MANANA, "16:30").andExpect(status().isConflict());   // 16:30–17:00 se encima con 16:10–16:40
         crear(maria, MANANA, "16:40").andExpect(status().isCreated());    // empieza justo cuando termina la otra
+        crear(paciente("Pedro Ruiz", "5550001111"), MANANA, "10:23").andExpect(status().isCreated())  // hora poco común, pero válida
+                .andExpect(jsonPath("$.horaFin").value("10:53"));
 
         mvc.perform(get("/api/agenda/disponibilidad").param("fecha", MANANA.toString())
                         .param("odontologoId", dra.getId().toString()).param("duracion", "30"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.libres", hasSize(2)))
+                .andExpect(jsonPath("$.libres", hasSize(3)))
                 .andExpect(jsonPath("$.libres[0].inicio").value("09:00"))
-                .andExpect(jsonPath("$.libres[0].fin").value("16:10"))
-                .andExpect(jsonPath("$.libres[1].inicio").value("17:10"))
-                .andExpect(jsonPath("$.libres[1].fin").value("19:00"))
+                .andExpect(jsonPath("$.libres[0].fin").value("10:23"))
+                .andExpect(jsonPath("$.libres[1].inicio").value("10:53"))
+                .andExpect(jsonPath("$.libres[1].fin").value("16:10"))
+                .andExpect(jsonPath("$.libres[2].inicio").value("17:10"))
+                .andExpect(jsonPath("$.libres[2].fin").value("19:00"))
                 // En la agenda, la cita de 16:10 aparece en el renglón de las 16:00 como inicio, no como continuación.
                 .andExpect(jsonPath("$.espacios[?(@.hora=='16:00')].continuacion").value(false));
     }
@@ -249,8 +251,7 @@ class CitasApplicationTests {
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.mensaje", containsString("después del cierre")));
         mvc.perform(post("/api/citas").contentType(MediaType.APPLICATION_JSON).content(json(juan, MANANA, "18:00", 42)))
-                .andExpect(status().isUnprocessableContent())
-                .andExpect(jsonPath("$.mensaje", containsString("múltiplo")));
+                .andExpect(status().isCreated());   // 18:00–18:42 sí cabe
     }
 
     @Test
@@ -336,8 +337,6 @@ class CitasApplicationTests {
                 .andExpect(jsonPath("$.mensaje", containsString("ya pasó")));
         urgencia(juan, HOY, "18:55", 15).andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.mensaje", containsString("horario de atención")));
-        urgencia(juan, HOY, "10:12", 15).andExpect(status().isUnprocessableContent())
-                .andExpect(jsonPath("$.mensaje", containsString("múltiplos de 5")));
         urgencia(juan, DOMINGO, "11:00", 15).andExpect(status().isUnprocessableContent());
         urgencia(juan, HOY, "10:10", 20).andExpect(status().isCreated());
     }

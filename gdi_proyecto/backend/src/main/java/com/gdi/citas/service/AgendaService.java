@@ -43,10 +43,9 @@ public class AgendaService {
     private static final Locale ES_MX = Locale.forLanguageTag("es-MX");
     private static final int MAX_DIAS_RESUMEN = 93;
     /**
-     * Las citas (programadas y urgencias) empiezan a cualquier hora en pasos de 5 minutos (ej. 16:10), porque el
-     * paciente no siempre puede llegar a una hora en punto. Las urgencias duran como máximo una hora.
+     * Las citas (programadas y urgencias) empiezan a la hora exacta que acuerde el paciente (ej. 16:23), porque no
+     * siempre puede llegar a una hora en punto. Las urgencias duran como máximo una hora.
      */
-    private static final int MINUTOS_PASO = 5;
     private static final int MAX_URGENCIA = 60;
     /** Estados que se muestran en la agenda (las canceladas liberan el espacio). */
     private static final EnumSet<EstadoCita> VISIBLES = EnumSet.complementOf(EnumSet.of(EstadoCita.Cancelada));
@@ -87,8 +86,8 @@ public class AgendaService {
     }
 
     /**
-     * Lanza una excepción si la cita no se puede agendar: fecha u hora pasada, día cerrado, hora fuera de horario,
-     * hora o duración que no van en pasos de 5 minutos, o cita que termina después del cierre.
+     * Lanza una excepción si la cita no se puede agendar: fecha u hora pasada, día cerrado, hora fuera de horario
+     * o cita que termina después del cierre. La hora puede ser cualquier minuto (ej. 16:23).
      * Que no se encime con otra cita lo revisa CitaService.
      */
     public void validarHorario(LocalDate fecha, LocalTime hora, int duracionMinutos) {
@@ -101,12 +100,6 @@ public class AgendaService {
         if (hora.isBefore(horario.getApertura()) || !hora.isBefore(horario.getCierre())) {
             throw new ReglaNegocioException("La hora debe estar dentro del horario de atención ("
                     + horario.getApertura() + " a " + horario.getCierre() + ").");
-        }
-        if (hora.getMinute() % MINUTOS_PASO != 0 || hora.getSecond() != 0) {
-            throw new ReglaNegocioException("La hora debe ir en múltiplos de " + MINUTOS_PASO + " minutos (ej. 16:10).");
-        }
-        if (duracionMinutos % MINUTOS_PASO != 0) {
-            throw new ReglaNegocioException("La duración debe ser múltiplo de " + MINUTOS_PASO + " minutos.");
         }
         if (!cabeAntesDelCierre(hora, duracionMinutos, horario)) {
             throw new ReglaNegocioException("Una cita de " + duracionMinutos + " minutos a las " + hora
@@ -130,12 +123,8 @@ public class AgendaService {
         }
         Horario horario = horario(fecha).orElseThrow(() -> new ReglaNegocioException(
                 "La clínica no atiende los " + nombreDia(fecha.getDayOfWeek()) + "."));
-        if (hora.getMinute() % MINUTOS_PASO != 0) {
-            throw new ReglaNegocioException("La hora de la urgencia debe ir en múltiplos de " + MINUTOS_PASO + " minutos.");
-        }
-        if (duracionMinutos > MAX_URGENCIA || duracionMinutos % MINUTOS_PASO != 0) {
-            throw new ReglaNegocioException("Una urgencia dura de 10 a " + MAX_URGENCIA + " minutos, en múltiplos de "
-                    + MINUTOS_PASO + ".");
+        if (duracionMinutos > MAX_URGENCIA) {
+            throw new ReglaNegocioException("Una urgencia dura de 10 a " + MAX_URGENCIA + " minutos.");
         }
         if (hora.isBefore(horario.getApertura()) || !cabeAntesDelCierre(hora, duracionMinutos, horario)) {
             throw new ReglaNegocioException("La urgencia debe atenderse dentro del horario de atención ("
@@ -197,7 +186,7 @@ public class AgendaService {
 
     /**
      * Tramos del día sin citas que ocupen horario (las urgencias y las inasistencias no ocupan). Si es hoy, empieza en
-     * la hora actual redondeada a los siguientes 5 minutos.
+     * el siguiente minuto.
      */
     private List<Tramo> tramosLibres(LocalDate fecha, Horario horario, List<Cita> citas, LocalDateTime ahora) {
         if (fecha.isBefore(ahora.toLocalDate())) {
@@ -206,13 +195,12 @@ public class AgendaService {
         LocalTime desde = horario.getApertura();
         if (fecha.equals(ahora.toLocalDate())) {
             LocalTime actual = ahora.toLocalTime();
-            int resto = actual.getMinute() % MINUTOS_PASO;
-            LocalTime redondeada = resto == 0 ? actual : actual.plusMinutes(MINUTOS_PASO - resto);
-            if (redondeada.isBefore(actual)) {
+            LocalTime siguiente = actual.plusMinutes(1);
+            if (siguiente.isBefore(actual)) {
                 return List.of();          // ya pasó la medianoche: no queda tiempo hoy
             }
-            if (redondeada.isAfter(desde)) {
-                desde = redondeada;
+            if (siguiente.isAfter(desde)) {
+                desde = siguiente;
             }
         }
         List<Cita> ocupan = citas.stream()
