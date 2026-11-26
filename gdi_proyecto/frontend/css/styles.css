@@ -507,3 +507,49 @@ input[type=file] { padding: 7px 10px; background: var(--blanco); }
 .odo-vista { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
 .odontograma--pasado { background: #fffaf2; border-color: #f1cf8f; }
 @media (max-width: 760px) { .odo-barra { grid-template-columns: 1fr; } }
+
+/* ---------- Teléfono (pantallas de hasta 600 px) ----------
+   Solo cambia la presentación: las mismas pantallas y las mismas llamadas a la API que en la PC. */
+@media (max-width: 600px) {
+    /* Campos de 16 px: el teléfono ya no hace zoom al escribir en ellos. */
+    input[type=text], input[type=email], input[type=password], input[type=date], input[type=time],
+    input[type=number], input[type=tel], input[type=search], select, textarea { font-size: 16px; }
+
+    /* Encabezado compacto y menú que se desliza de lado. */
+    .topbar { padding: 8px 12px; gap: 8px; }
+    .topbar__marca small { display: none; }
+    .topbar__emblema { width: 40px; height: 38px; }
+    .topbar__emblema img { height: 52px; margin-top: -7px; }
+    .tabs { overflow-x: auto; scrollbar-width: none; }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab { flex: none; white-space: nowrap; padding: 8px 10px; }
+    .tab svg.ic { display: none; }   /* sin íconos caben las 4 pestañas */
+
+    /* Indicadores en 2 columnas más pequeñas. */
+    .contenido { padding: 12px 12px 28px; }
+    .kpis { gap: 8px; margin-bottom: 12px; }
+    .kpi { padding: 10px; gap: 8px; }
+    .kpi__icono { width: 30px; height: 30px; border-radius: 9px; }
+    .kpi__icono svg.ic { width: 17px; height: 17px; }
+    .kpi__valor { font-size: 17px; }
+    .kpi__etiqueta { font-size: 11px; }
+    .panel { padding: 14px; }
+
+    /* Botones más fáciles de tocar. */
+    .btn { min-height: 42px; }
+
+    /* Las ventanas (nueva cita, paciente, expediente…) salen desde abajo y ocupan el ancho completo. */
+    .modal { padding: 0; place-items: end stretch; }
+    .modal__caja, .modal__caja--chica, .modal__caja--grande {
+        max-width: none; max-height: 94dvh; border-radius: 18px 18px 0 0;
+    }
+    .modal__cabecera { padding: 14px 16px 8px; }
+    .modal__cuerpo { padding: 4px 16px 20px; }
+    .acciones-form .btn { flex: 1; justify-content: center; }
+
+    /* Odontograma: se desliza de lado para ver los 32 dientes. */
+    .odontograma::before {
+        content: "← Desliza para ver todos los dientes →"; position: sticky; left: 0; display: block;
+        text-align: center; font-size: 11px; font-weight: 700; color: var(--gris-500); margin-bottom: 4px;
+    }
+}
