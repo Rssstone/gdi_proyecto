@@ -132,6 +132,15 @@ oculta las consultas de solo lectura).
 15:26:57 MODIFICADO odontogramas donde id=1: estado_diente='Endodoncia', superficies='O:C'
 ```
 
+## Paso 7. La laptop como servidor del frontend (para abrirlo en el teléfono)
+
+En la carpeta `frontend` se da doble clic a `iniciar-frontend.bat` (o se corre `node servidor.js`). La laptop entrega
+la página en el puerto 5500 y reenvía las llamadas `/api` a la VM del backend.
+
+- **Teléfono en el mismo Wi-Fi:** abrir la dirección que muestra la ventana, por ejemplo `http://192.168.1.70:5500`.
+- **Teléfono en otra red o con datos:** en VS Code, pestaña **PUERTOS** → **Reenviar un puerto** → `5500` → clic
+  derecho → **Visibilidad del puerto → Pública**, y abrir en el teléfono la **Dirección reenviada** (`https://…devtunnels.ms`).
+
 ## Mantenimiento
 
 | Qué | Dónde | Cómo |
